@@ -2,6 +2,8 @@
 
 A local-first Markdown notes app for macOS. It has a clean, Capacities-style interface, Simplenote-fast note taking, colored tags, and bundled fonts such as IBM Plex Sans and Roboto.
 
+![MD Notes](docs/screenshot.png)
+
 ## Features
 
 - **Plain Markdown files on your Mac.** Each note is a `.md` file with YAML frontmatter in `~/Documents/MD Notes` by default. You can change the folder in Settings (an iCloud Drive folder gives you sync across Macs). Edits made in other editors show up live.
@@ -10,6 +12,8 @@ A local-first Markdown notes app for macOS. It has a clean, Capacities-style int
 - **Colored tags.** Add tags under the title (with autocomplete). Click a tag in the sidebar to filter. Right-click a tag to pick one of 10 colors, rename it, or delete it across all notes.
 - **Fonts.** IBM Plex Sans, Roboto, Inter, IBM Plex Serif, Lora, IBM Plex Mono, JetBrains Mono and the system font are all bundled, so they work offline. You can also adjust text size and line width.
 - **Light and dark themes**, pinned notes, sorting (last edited, created, title), and a word count.
+
+![Settings](docs/settings.png)
 
 ## Note format
 
