@@ -258,17 +258,49 @@ function registerIpc() {
   ipcMain.handle('tasks:moveToList', (_e, fromId, toId, taskId) => tasks.moveToList(fromId, toId, taskId));
 }
 
-app.whenReady().then(async () => {
-  tasksModel = await import('../shared/tasks.mjs');
-  await loadSettings();
-  await openStore(settings.notesDir);
-  registerIpc();
-  buildMenu();
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+// MDNOTES_SMOKE_TEST=1 launches the packaged app, checks that notes and task
+// lists render, prints SMOKE_OK or SMOKE_FAIL, and quits. Used by CI.
+const smokeTest = Boolean(process.env.MDNOTES_SMOKE_TEST);
+
+async function runSmokeTest() {
+  const wc = mainWindow.webContents;
+  if (wc.isLoading()) await new Promise((resolve) => wc.once('did-finish-load', resolve));
+  const ok = await wc.executeJavaScript(`new Promise((resolve) => {
+    const started = Date.now();
+    const check = () => {
+      const notes = document.querySelectorAll('.note-item').length;
+      const lists = document.querySelectorAll('.lists-nav .nav-item').length;
+      if (notes > 0 && lists > 1) resolve(true);
+      else if (Date.now() - started > 15000) resolve(false);
+      else setTimeout(check, 200);
+    };
+    check();
+  })`);
+  console.log(ok ? 'SMOKE_OK' : 'SMOKE_FAIL');
+  app.exit(ok ? 0 : 1);
+}
+
+app
+  .whenReady()
+  .then(async () => {
+    tasksModel = await import('../shared/tasks.mjs');
+    await loadSettings();
+    if (smokeTest) settings.notesDir = path.join(app.getPath('temp'), `mdnotes-smoke-${process.pid}`);
+    await openStore(settings.notesDir);
+    registerIpc();
+    buildMenu();
+    createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+    if (smokeTest) await runSmokeTest();
+  })
+  .catch((err) => {
+    console.error(err);
+    if (smokeTest) console.log('SMOKE_FAIL');
+    else dialog.showErrorBox('MD Notes could not start', String(err?.stack || err));
+    app.exit(1);
   });
-});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

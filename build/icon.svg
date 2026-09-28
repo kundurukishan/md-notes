@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7d70ff"/>
+      <stop offset="1" stop-color="#5443e6"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f1efff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#1c1266" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- macOS icon grid: 824×824 rounded square centred on a 1024 canvas -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <g filter="url(#shadow)">
+    <rect x="262" y="212" width="500" height="600" rx="56" fill="url(#page)"/>
+  </g>
+  <!-- Markdown heading mark -->
+  <text x="322" y="360" font-family="Helvetica, Arial, sans-serif" font-size="92" font-weight="700" fill="#c9c3ff">#</text>
+  <rect x="392" y="298" width="250" height="44" rx="22" fill="#2b2466"/>
+  <!-- Text lines -->
+  <rect x="322" y="410" width="380" height="26" rx="13" fill="#d9d5f7"/>
+  <rect x="322" y="462" width="320" height="26" rx="13" fill="#d9d5f7"/>
+  <!-- Checked task -->
+  <circle cx="352" cy="572" r="30" fill="#6a5cff"/>
+  <path d="M337 572 l11 11 l21 -23" stroke="#fff" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="404" y="559" width="220" height="26" rx="13" fill="#d9d5f7"/>
+  <!-- Open task -->
+  <circle cx="352" cy="656" r="27" fill="none" stroke="#b7b0ee" stroke-width="7"/>
+  <rect x="404" y="643" width="180" height="26" rx="13" fill="#d9d5f7"/>
+  <!-- Colored tags -->
+  <rect x="322" y="722" width="120" height="42" rx="12" fill="#e1ecfb"/>
+  <rect x="338" y="736" width="88" height="14" rx="7" fill="#2860b8"/>
+  <rect x="456" y="722" width="120" height="42" rx="12" fill="#fbecdd"/>
+  <rect x="472" y="736" width="88" height="14" rx="7" fill="#b35815"/>
+  <rect x="590" y="722" width="112" height="42" rx="12" fill="#e3f3e8"/>
+  <rect x="606" y="736" width="80" height="14" rx="7" fill="#2f7a48"/>
+</svg>

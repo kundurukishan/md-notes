@@ -70,7 +70,11 @@ updated: 2026-09-26T07:12:00.000Z
 
 The filename follows the title. Frontmatter keys the app doesn't know about are preserved. Deleted notes go to `.trash/` inside the notes folder. Tag colors are stored in `.mdnotes/tags.json`.
 
-## Getting started
+## Installing
+
+Download the `.dmg`, drag MD Notes to Applications, and confirm the first launch. **[INSTALL.md](INSTALL.md)** walks through each step, including where to download the installer and how to publish a new release.
+
+## Development
 
 Requires Node.js 20+.
 
@@ -80,9 +84,7 @@ npm run dev      # run the app with hot reload
 npm run dist     # build a .dmg into release/
 ```
 
-`npm run dev:web` runs the UI in a browser with a localStorage-backed store, which is handy for UI work. `npm test` runs the storage tests.
-
-The built app is unsigned, so the first time you open it, right-click **MD Notes.app → Open**.
+`npm run dev:web` runs the UI in a browser with a localStorage-backed store, which is handy for UI work. `npm test` runs the storage and task tests.
 
 ## Keyboard shortcuts
 
