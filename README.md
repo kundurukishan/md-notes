@@ -6,14 +6,24 @@ A local-first Markdown notes app for macOS. It has a clean, Capacities-style int
 
 ## Features
 
-- **Plain Markdown files on your Mac.** Each note is a `.md` file with YAML frontmatter in `~/Documents/MD Notes` by default. You can change the folder in Settings (an iCloud Drive folder gives you sync across Macs). Edits made in other editors show up live.
+- **Plain Markdown files on your Mac.** Each note is a `.md` file with YAML frontmatter in `~/Documents/MD Notes` by default. You can change the folder in Settings. Edits made in other editors show up live.
 - **Fast capture.** `⌘N` creates a note and autosave runs as you type. Empty notes are discarded when you leave them. Search is instant and supports `#tag` filters.
 - **Live Markdown editor.** Built on CodeMirror. Headings, bold, italics, links and code are styled as you type, and lists and checklists continue when you press Enter. `⌘E` switches to a rendered preview where you can tick checkboxes.
 - **Colored tags.** Add tags under the title (with autocomplete). Click a tag in the sidebar to filter. Right-click a tag to pick one of 10 colors, rename it, or delete it across all notes.
 - **Fonts.** IBM Plex Sans, Roboto, Inter, IBM Plex Serif, Lora, IBM Plex Mono, JetBrains Mono and the system font are all bundled, so they work offline. You can also adjust text size and line width.
 - **Light and dark themes**, pinned notes, sorting (last edited, created, title), and a word count.
 
+| Preview | Dark mode |
+| --- | --- |
+| ![Preview with checkboxes](docs/preview.png) | ![Dark mode](docs/dark.png) |
+
 ![Settings](docs/settings.png)
+
+## Backing up to Google Drive
+
+Install [Google Drive for desktop](https://www.google.com/drive/download/). It adds **Google Drive › My Drive** to Finder (at `~/Library/CloudStorage/GoogleDrive-<your account>/My Drive`). In MD Notes, open **Settings → Notes folder → Change…** and choose (or create) a folder there, such as `My Drive/MD Notes`. Your notes are then synced to Google Drive and still work offline. An iCloud Drive folder works the same way.
+
+Changing the folder doesn't move existing notes. To bring them along, copy the `.md` files (and the hidden `.mdnotes` folder, which holds tag colors) into the new folder first.
 
 ## Note format
 

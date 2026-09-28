@@ -1,17 +1,7 @@
 import { useMemo } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-
-// Matches task items, including nested (`- - [ ]`) and quoted (`> - [ ]`) ones.
-const TASK_RE = /^((?:\s*>)*\s*(?:(?:[-*+]|\d+[.)])\s+)+\[)([ xX])(\])/gm;
-
-// Flips the nth Markdown task checkbox in the source text.
-export function toggleTask(body: string, index: number): string {
-  let i = 0;
-  return body.replace(TASK_RE, (match, open: string, mark: string, close: string) =>
-    i++ === index ? `${open}${mark === ' ' ? 'x' : ' '}${close}` : match,
-  );
-}
+import { toggleTask } from './markdown';
 
 interface PreviewProps {
   body: string;

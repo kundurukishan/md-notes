@@ -491,6 +491,7 @@ kbd { font-family: var(--ui-font); }
 .markdown li:has(> input[type='checkbox']) { list-style: none; margin-left: -1.4em; }
 .markdown input[type='checkbox'] { width: 1em; height: 1em; margin: 0 0.5em 0 0; vertical-align: -0.12em; accent-color: var(--accent); cursor: pointer; }
 .markdown blockquote { margin: 0 0 0.9em; padding: 0.1em 0 0.1em 1em; border-left: 3px solid var(--border-strong); color: var(--text-muted); }
+.markdown blockquote > :last-child { margin-bottom: 0; }
 .markdown code { font-family: var(--mono-font); font-size: 0.88em; padding: 0.15em 0.35em; border-radius: 4px; background: var(--code-bg); color: var(--code-fg); }
 .markdown pre { padding: 14px 16px; border-radius: 10px; background: var(--code-bg); overflow-x: auto; }
 .markdown pre code { padding: 0; background: none; color: var(--text); }
@@ -590,6 +591,9 @@ kbd { font-family: var(--ui-font); }
 .hint { margin: 2px 0 10px; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
 .settings-row .hint { margin: 2px 0 0; }
 .hint code { font-family: var(--mono-font); font-size: 11px; }
+.hint a { color: var(--accent); text-decoration: none; }
+.hint a:hover { text-decoration: underline; }
+.hint strong { color: var(--text); font-weight: 600; }
 
 .font-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .font-card {

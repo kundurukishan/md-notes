@@ -14,7 +14,7 @@
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder --mac",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.cjs"
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test test/*.test.cjs test/*.test.mjs"
   },
   "build": {
     "appId": "com.mdnotes.app",

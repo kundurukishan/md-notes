@@ -103,7 +103,14 @@ export function SettingsDialog({ settings, isDesktop, onChange, onChooseFolder, 
 
         <section className="settings-section">
           <h3>Notes folder</h3>
-          <p className="hint">Each note is saved as a <code>.md</code> file in this folder. Point it at an iCloud Drive folder to sync across Macs.</p>
+          <p className="hint">Each note is saved as a <code>.md</code> file in this folder.</p>
+          <p className="hint">
+            <strong>Back up to Google Drive:</strong> install{' '}
+            <a href="https://www.google.com/drive/download/" target="_blank" rel="noreferrer">
+              Google Drive for desktop
+            </a>
+            , then choose a folder inside <em>Google Drive › My Drive</em> in Finder. Your notes sync to Drive and stay available offline. An iCloud Drive folder works the same way.
+          </p>
           <div className="folder-row">
             <code className="folder-path" title={settings.notesDir}>
               {settings.notesDir}
