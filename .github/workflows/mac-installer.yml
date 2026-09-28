@@ -1,13 +1,25 @@
 name: Build Mac installer
 
 # Builds MD-Notes-<version>-mac.dmg (universal: Apple Silicon + Intel).
-# - Run it by hand from the Actions tab, or on pull requests that touch the app:
-#   the .dmg is attached to the run as an artifact.
-# - Push a tag like v0.1.0 to also publish a GitHub Release with the .dmg.
+# - Runs on pushes and pull requests that change the app, and by hand from the
+#   Actions tab: the .dmg is attached to the run as an artifact.
+# - Pushing a tag like v0.1.0 also publishes a GitHub Release with the .dmg.
+#   (Path filters don't apply to tag pushes, so tags always build.)
 on:
   workflow_dispatch:
   push:
+    branches: ['**']
     tags: ['v*']
+    paths:
+      - package.json
+      - package-lock.json
+      - build/**
+      - electron/**
+      - shared/**
+      - src/**
+      - index.html
+      - vite.config.ts
+      - .github/workflows/mac-installer.yml
   pull_request:
     paths:
       - package.json
