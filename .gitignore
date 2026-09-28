@@ -3,3 +3,9 @@ dist/
 release/
 .DS_Store
 *.log
+
+__pycache__/
+*.pyc
+.venv/
+state/*.tmp
+*.service-account.json
