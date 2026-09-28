@@ -1,3 +1,8 @@
+import * as tasksModel from '../shared/tasks.mjs';
+import type { ListOpArgs, ListOpName, TaskList } from '../shared/tasks.mjs';
+
+export type { Task, TaskList, TaskRef, TaskPatch, ListOpName, ListOpArgs } from '../shared/tasks.mjs';
+
 export interface Note {
   id: string;
   title: string;
@@ -21,7 +26,7 @@ export interface Settings {
 }
 
 export type TagColors = Record<string, string>;
-export type MenuCommand = 'new' | 'search' | 'preview' | 'settings' | 'pin' | 'trash' | 'sidebar';
+export type MenuCommand = 'new' | 'search' | 'preview' | 'settings' | 'pin' | 'trash' | 'sidebar' | 'show-notes' | 'show-today';
 
 export interface NotesApi {
   platform: string;
@@ -36,6 +41,13 @@ export interface NotesApi {
   getTagColors(): Promise<TagColors>;
   setTagColor(tag: string, color: string): Promise<TagColors>;
   renameTag(from: string, to: string): Promise<Note[]>;
+  listTaskLists(): Promise<TaskList[]>;
+  createTaskList(name: string, id?: string): Promise<TaskList>;
+  renameTaskList(id: string, name: string): Promise<TaskList>;
+  deleteTaskList(id: string): Promise<void>;
+  applyTaskOp<K extends ListOpName>(id: string, op: K, args: ListOpArgs<K>): Promise<TaskList>;
+  moveTaskToList(fromId: string, toId: string, taskId: string): Promise<[TaskList, TaskList]>;
+  onTasksChanged(callback: () => void): () => void;
   onNotesChanged(callback: () => void): () => void;
   onMenuCommand(callback: (command: MenuCommand) => void): () => void;
 }
@@ -52,12 +64,13 @@ export const isDesktop = Boolean(window.notesApi);
 // back to a localStorage store with the same behavior for UI development.
 function createBrowserApi(): NotesApi {
   const KEY = 'mdnotes:web';
-  type State = { notes: Note[]; colors: TagColors; settings: Settings };
+  // Task lists are kept as Markdown text, like the files on disk.
+  type State = { notes: Note[]; colors: TagColors; settings: Settings; taskFiles: { name: string; raw: string }[] };
   const now = () => new Date().toISOString();
   const load = (): State => {
     try {
       const parsed = JSON.parse(localStorage.getItem(KEY) || '');
-      if (parsed?.notes) return parsed;
+      if (parsed?.notes) return { taskFiles: [], ...parsed };
     } catch {
       // fall through to the seed state
     }
@@ -75,6 +88,7 @@ function createBrowserApi(): NotesApi {
         },
       ],
       colors: { 'getting-started': 'purple' },
+      taskFiles: [{ name: 'My Tasks', raw: '- [ ] Click a task to add details, tags and a due date #getting-started\n- [ ] Press Enter to add the next task, Tab to make it a subtask\n' }],
       settings: { notesDir: '~/Documents/MD Notes', font: 'IBM Plex Sans', fontSize: 16, lineWidth: 720, theme: 'system', sort: 'updated' },
     };
   };
@@ -93,6 +107,23 @@ function createBrowserApi(): NotesApi {
     for (let i = 0; ; i++) {
       const id = i === 0 ? `${base}.md` : `${base} ${i + 1}.md`;
       if (id === current || !state.notes.some((n) => n.id === id)) return id;
+    }
+  };
+
+  // Parsed lists stay in memory so task ids are stable, like in the main process.
+  let lists: TaskList[] | null = null;
+  const getLists = () => (lists ??= state.taskFiles.map((f) => tasksModel.parseList(f.raw, { name: f.name })));
+  const saveLists = () => {
+    state.taskFiles = getLists()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((l) => ({ name: l.name, raw: tasksModel.serializeList(l) }));
+    persist();
+  };
+  const uniqueListName = (name: string, id?: string) => {
+    const base = name.replace(/[\\/:*?"<>|#^[\]]/g, '').trim() || 'Untitled list';
+    for (let i = 0; ; i++) {
+      const candidate = i === 0 ? base : `${base} ${i + 1}`;
+      if (!getLists().some((l) => l.id !== id && l.name.toLowerCase() === candidate.toLowerCase())) return candidate;
     }
   };
 
@@ -142,9 +173,41 @@ function createBrowserApi(): NotesApi {
       state.notes = state.notes.map((n) => (n.tags.includes(from) ? { ...n, tags: norm(n.tags.map((t) => (t === from ? dst : t)).filter(Boolean)) } : n));
       if (dst && state.colors[from] && !state.colors[dst]) state.colors[dst] = state.colors[from];
       delete state.colors[from];
-      persist();
+      lists = getLists().map((l) => tasksModel.renameTag(l, from, to));
+      saveLists();
       return clone(state.notes);
     },
+    listTaskLists: async () => clone(getLists()),
+    createTaskList: async (name, id) => {
+      const list = tasksModel.parseList('', { id, name: uniqueListName(name || 'Untitled list') });
+      getLists().push(list);
+      saveLists();
+      return clone(list);
+    },
+    renameTaskList: async (id, name) => {
+      const list = getLists().find((l) => l.id === id)!;
+      list.name = uniqueListName(name || 'Untitled list', id);
+      saveLists();
+      return clone(list);
+    },
+    deleteTaskList: async (id) => {
+      lists = getLists().filter((l) => l.id !== id);
+      saveLists();
+    },
+    applyTaskOp: async (id, op, args) => {
+      const fn = tasksModel.LIST_OPS[op] as (list: TaskList, ...a: unknown[]) => TaskList;
+      lists = getLists().map((l) => (l.id === id ? fn(l, ...(args as unknown[])) : l));
+      saveLists();
+      return clone(lists.find((l) => l.id === id)!);
+    },
+    moveTaskToList: async (fromId, toId, taskId) => {
+      const all = getLists();
+      const res = tasksModel.moveToList(all.find((l) => l.id === fromId)!, all.find((l) => l.id === toId)!, taskId);
+      lists = all.map((l) => (l.id === fromId ? res.from : l.id === toId ? res.to : l));
+      saveLists();
+      return [clone(res.from), clone(res.to)];
+    },
+    onTasksChanged: () => () => {},
     onNotesChanged: () => () => {},
     onMenuCommand: () => () => {},
   };

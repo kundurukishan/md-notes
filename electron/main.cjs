@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { NoteStore } = require('./store.cjs');
+const { TaskStore } = require('./tasks.cjs');
 
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
 const DEFAULT_SETTINGS = {
@@ -16,7 +17,9 @@ const DEFAULT_SETTINGS = {
 
 let settings = { ...DEFAULT_SETTINGS };
 let store = null;
-let watcher = null;
+let tasks = null;
+let tasksModel = null;
+let watchers = [];
 let mainWindow = null;
 
 async function loadSettings() {
@@ -37,7 +40,30 @@ async function openStore(dir) {
   const firstRun = !fs.existsSync(dir);
   await store.ensureDir();
   if (firstRun) await seedWelcomeNote();
-  watchFolder();
+
+  // Task lists are Markdown files in a Tasks folder next to the notes.
+  tasks = new TaskStore(path.join(dir, 'Tasks'), path.join(dir, '.trash', 'Tasks'), tasksModel);
+  const seedList = !(await tasks.exists());
+  await tasks.load();
+  if (seedList) await seedTasks();
+  watchFolders();
+}
+
+async function seedTasks() {
+  const due = new Date();
+  due.setDate(due.getDate() + 1);
+  const tomorrow = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+  await tasks.createList(
+    'My Tasks',
+    null,
+    [
+      '- [ ] Click a task to add details, tags and a due date #getting-started',
+      '- [ ] Press Enter to add the next task, Tab to make it a subtask',
+      '- [ ] Drag tasks to reorder them, or onto another list in the sidebar',
+      `- [ ] Check the Today view for tasks that are due 📅 ${tomorrow}`,
+      '',
+    ].join('\n'),
+  );
 }
 
 async function seedWelcomeNote() {
@@ -49,7 +75,8 @@ async function seedWelcomeNote() {
       '',
       '## Shortcuts',
       '',
-      '- `⌘N` new note',
+      '- `⌘N` new note (or task, in Tasks)',
+      '- `⌘1` notes, `⌘2` today\'s tasks',
       '- `⌘F` search notes',
       '- `⌘E` toggle preview',
       '- `⌘,` settings',
@@ -67,19 +94,28 @@ async function seedWelcomeNote() {
 }
 
 // Tell the renderer when files change outside the app (e.g. edited in another
-// editor or synced by iCloud), ignoring the writes we made ourselves.
-function watchFolder() {
-  if (watcher) watcher.close();
-  let timer = null;
-  try {
-    watcher = fs.watch(store.dir, (_event, filename) => {
-      if (!filename || !/\.md$/i.test(filename) || store.isOwnWrite(filename)) return;
-      clearTimeout(timer);
-      timer = setTimeout(() => mainWindow?.webContents.send('notes:changed'), 300);
-    });
-  } catch {
-    watcher = null;
-  }
+// editor or synced by Google Drive), ignoring the writes we made ourselves.
+function watchFolders() {
+  for (const w of watchers) w.close();
+  watchers = [];
+  const watch = (dir, owner, onChange) => {
+    let timer = null;
+    try {
+      watchers.push(
+        fs.watch(dir, (_event, filename) => {
+          if (!filename || !/\.md$/i.test(filename) || filename.startsWith('.') || owner.isOwnWrite(filename)) return;
+          clearTimeout(timer);
+          timer = setTimeout(onChange, 300);
+        }),
+      );
+    } catch {
+      // Watching is best effort; the app still works without it.
+    }
+  };
+  watch(store.dir, store, () => mainWindow?.webContents.send('notes:changed'));
+  watch(tasks.dir, tasks, async () => {
+    if (await tasks.serialize(() => tasks.load())) mainWindow?.webContents.send('tasks:changed');
+  });
 }
 
 function createWindow() {
@@ -145,7 +181,7 @@ function buildMenu() {
     {
       label: 'File',
       submenu: [
-        { label: 'New Note', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new') },
+        { label: 'New Note or Task', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new') },
         { label: 'Search Notes', accelerator: 'CmdOrCtrl+F', click: () => sendCommand('search') },
         { type: 'separator' },
         { label: 'Toggle Pin', accelerator: 'CmdOrCtrl+Shift+P', click: () => sendCommand('pin') },
@@ -159,6 +195,9 @@ function buildMenu() {
     {
       label: 'View',
       submenu: [
+        { label: 'Notes', accelerator: 'CmdOrCtrl+1', click: () => sendCommand('show-notes') },
+        { label: 'Today', accelerator: 'CmdOrCtrl+2', click: () => sendCommand('show-today') },
+        { type: 'separator' },
         { label: 'Toggle Preview', accelerator: 'CmdOrCtrl+E', click: () => sendCommand('preview') },
         { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+\\', click: () => sendCommand('sidebar') },
         { type: 'separator' },
@@ -206,10 +245,21 @@ function registerIpc() {
 
   ipcMain.handle('tags:colors', () => store.getTagColors());
   ipcMain.handle('tags:setColor', (_e, tag, color) => store.setTagColor(tag, color));
-  ipcMain.handle('tags:rename', (_e, from, to) => store.renameTag(from, to));
+  ipcMain.handle('tags:rename', async (_e, from, to) => {
+    await store.renameTag(from, to);
+    await tasks.renameTag(from, to);
+  });
+
+  ipcMain.handle('tasks:all', () => tasks.all());
+  ipcMain.handle('tasks:createList', (_e, name, id) => tasks.createList(name, id));
+  ipcMain.handle('tasks:renameList', (_e, id, name) => tasks.renameList(id, name));
+  ipcMain.handle('tasks:deleteList', (_e, id) => tasks.deleteList(id));
+  ipcMain.handle('tasks:apply', (_e, id, op, args) => tasks.apply(id, op, Array.isArray(args) ? args : []));
+  ipcMain.handle('tasks:moveToList', (_e, fromId, toId, taskId) => tasks.moveToList(fromId, toId, taskId));
 }
 
 app.whenReady().then(async () => {
+  tasksModel = await import('../shared/tasks.mjs');
   await loadSettings();
   await openStore(settings.notesDir);
   registerIpc();

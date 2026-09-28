@@ -103,7 +103,9 @@ export function SettingsDialog({ settings, isDesktop, onChange, onChooseFolder, 
 
         <section className="settings-section">
           <h3>Notes folder</h3>
-          <p className="hint">Each note is saved as a <code>.md</code> file in this folder.</p>
+          <p className="hint">
+            Each note is saved as a <code>.md</code> file in this folder, and each task list as a <code>.md</code> file in its <code>Tasks</code> subfolder.
+          </p>
           <p className="hint">
             <strong>Back up to Google Drive:</strong> install{' '}
             <a href="https://www.google.com/drive/download/" target="_blank" rel="noreferrer">

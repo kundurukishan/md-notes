@@ -31,3 +31,13 @@ export const IconFolder = ({ size }: P) => svg(size, <><path d="M20 20a2 2 0 0 0
 export const IconSidebar = ({ size }: P) => svg(size, <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /></>);
 export const IconSort = ({ size }: P) => svg(size, <><path d="m3 16 4 4 4-4M7 20V4M21 8l-4-4-4 4M17 4v16" /></>);
 export const IconX = ({ size }: P) => svg(size, <><path d="M18 6 6 18M6 6l12 12" /></>);
+export const IconCheck = ({ size }: P) => svg(size, <><path d="M5 12.5 10 17 19 7.5" /></>);
+export const IconCheckCircle = ({ size }: P) => svg(size, <><circle cx="12" cy="12" r="9" /><path d="m8.5 12 2.5 2.5 4.5-5" /></>);
+export const IconGrip = ({ size }: P) => svg(size, <><circle cx="9" cy="6" r="1" /><circle cx="15" cy="6" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="9" cy="18" r="1" /><circle cx="15" cy="18" r="1" /></>);
+export const IconCalendar = ({ size }: P) => svg(size, <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></>);
+export const IconSun = ({ size }: P) => svg(size, <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>);
+export const IconList = ({ size }: P) => svg(size, <><path d="M9 6h11M9 12h11M9 18h11" /><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2" /></>);
+export const IconChevron = ({ size }: P) => svg(size, <><path d="m9 6 6 6-6 6" /></>);
+export const IconMore = ({ size }: P) => svg(size, <><circle cx="5" cy="12" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="19" cy="12" r="1.2" /></>);
+export const IconSubtask = ({ size }: P) => svg(size, <><path d="M5 4v9a3 3 0 0 0 3 3h11" /><path d="m15 12 4 4-4 4" /></>);
+export const IconDetails = ({ size }: P) => svg(size, <><path d="M4 6h16M4 12h16M4 18h10" /></>);

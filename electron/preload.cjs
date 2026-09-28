@@ -19,6 +19,13 @@ contextBridge.exposeInMainWorld('notesApi', {
   getTagColors: () => ipcRenderer.invoke('tags:colors'),
   setTagColor: (tag, color) => ipcRenderer.invoke('tags:setColor', tag, color),
   renameTag: (from, to) => ipcRenderer.invoke('tags:rename', from, to),
+  listTaskLists: () => ipcRenderer.invoke('tasks:all'),
+  createTaskList: (name, id) => ipcRenderer.invoke('tasks:createList', name, id),
+  renameTaskList: (id, name) => ipcRenderer.invoke('tasks:renameList', id, name),
+  deleteTaskList: (id) => ipcRenderer.invoke('tasks:deleteList', id),
+  applyTaskOp: (id, op, args) => ipcRenderer.invoke('tasks:apply', id, op, args),
+  moveTaskToList: (fromId, toId, taskId) => ipcRenderer.invoke('tasks:moveToList', fromId, toId, taskId),
+  onTasksChanged: (callback) => subscribe('tasks:changed', callback),
   onNotesChanged: (callback) => subscribe('notes:changed', callback),
   onMenuCommand: (callback) => subscribe('menu:command', callback),
 });
