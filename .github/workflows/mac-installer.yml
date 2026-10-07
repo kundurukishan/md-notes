@@ -58,6 +58,10 @@ jobs:
         env:
           # No Apple Developer certificate: the app is ad-hoc signed.
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # electron-builder skips all signing on pull requests by default,
+          # which leaves an app that Apple Silicon Macs won't open. Ad-hoc
+          # signing uses no secrets, so it is safe to keep it on for PRs.
+          CSC_FOR_PULL_REQUEST: 'true'
 
       - name: Verify the app bundle and signature
         run: |
