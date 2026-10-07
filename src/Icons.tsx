@@ -41,3 +41,4 @@ export const IconChevron = ({ size }: P) => svg(size, <><path d="m9 6 6 6-6 6" /
 export const IconMore = ({ size }: P) => svg(size, <><circle cx="5" cy="12" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="19" cy="12" r="1.2" /></>);
 export const IconSubtask = ({ size }: P) => svg(size, <><path d="M5 4v9a3 3 0 0 0 3 3h11" /><path d="m15 12 4 4-4 4" /></>);
 export const IconDetails = ({ size }: P) => svg(size, <><path d="M4 6h16M4 12h16M4 18h10" /></>);
+export const IconTextColor = ({ size }: P) => svg(size, <><path d="m6 16 6-12 6 12M8.5 11h7" /><path d="M4 20.5h16" strokeWidth={2.6} stroke="var(--accent)" /></>);

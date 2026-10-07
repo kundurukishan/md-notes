@@ -3,6 +3,8 @@ import type { EditorView } from '@codemirror/view';
 import { api, isDesktop, type MenuCommand, type Note, type Settings, type TagColors } from './api';
 import { Editor } from './Editor';
 import { Preview } from './Preview';
+import { TextFormatMenu } from './TextFormatMenu';
+import { stripFormatting } from './richtext';
 import { SettingsDialog } from './SettingsDialog';
 import { TagChip, TagInput } from './TagInput';
 import { TAG_COLORS, fontStack, tagColor } from './theme';
@@ -22,6 +24,7 @@ import {
   IconSidebar,
   IconSort,
   IconSun,
+  IconTextColor,
   IconTrash,
   IconUntagged,
 } from './Icons';
@@ -37,7 +40,7 @@ let keySeq = 0;
 const newKey = () => `n${++keySeq}`;
 
 function snippet(body: string): string {
-  return body
+  return stripFormatting(body)
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/^\s*(#{1,6}\s+|>\s?|[-*+]\s+(\[[ xX]\]\s+)?|\d+[.)]\s+)/gm, '')
     .replace(/[*_~`]+/g, '')
@@ -71,6 +74,7 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>({ kind: 'all' });
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState(false);
+  const [formatOpen, setFormatOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [tagMenu, setTagMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
@@ -224,7 +228,7 @@ export default function App() {
         if (filter.kind === 'untagged' && n.tags.length) return false;
         if (filter.kind === 'tag' && !n.tags.includes(filter.tag)) return false;
         if (!tagTerms.every((t) => n.tags.some((tag) => tag.startsWith(t)))) return false;
-        const hay = `${n.title}\n${n.body}`.toLowerCase();
+        const hay = `${n.title}\n${stripFormatting(n.body)}`.toLowerCase();
         return textTerms.every((w) => hay.includes(w));
       })
       .sort((a, b) => {
@@ -376,6 +380,9 @@ export default function App() {
         case 'show-today':
           setView({ kind: 'today' });
           break;
+        case 'format':
+          if (view.kind === 'notes' && !preview && editorRef.current) setFormatOpen((o) => !o);
+          break;
         case 'preview':
           if (view.kind === 'notes') setPreview((p) => !p);
           break;
@@ -393,7 +400,7 @@ export default function App() {
           break;
       }
     },
-    [createNote, togglePin, trashSelected, view.kind],
+    [createNote, togglePin, trashSelected, view.kind, preview],
   );
 
   const commandRef = useRef(runCommand);
@@ -416,6 +423,8 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  useEffect(() => setFormatOpen(false), [selectedKey, preview, view.kind]);
 
   // ---- Appearance ---------------------------------------------------------
 
@@ -472,7 +481,7 @@ export default function App() {
     pinned: notes.filter((n) => n.pinned).length,
     untagged: notes.filter((n) => !n.tags.length).length,
   };
-  const words = selected ? (selected.body.match(/\S+/g) ?? []).length : 0;
+  const words = selected ? (stripFormatting(selected.body).match(/\S+/g) ?? []).length : 0;
   const nextSort = { updated: 'created', created: 'title', title: 'updated' } as const;
   const sortLabel = { updated: 'Last edited', created: 'Date created', title: 'Title' };
 
@@ -724,6 +733,20 @@ export default function App() {
                   <button className={`icon-button${selected.pinned ? ' on' : ''}`} onClick={togglePin} title="Pin note (⇧⌘P)" aria-label="Pin note">
                     <IconPin />
                   </button>
+                  <div className="menu-anchor">
+                    <button
+                      className={`icon-button${formatOpen ? ' on' : ''}`}
+                      data-format-toggle
+                      disabled={preview}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setFormatOpen((o) => !o)}
+                      title="Text color and heading weight (⇧⌘C)"
+                      aria-label="Text formatting"
+                    >
+                      <IconTextColor />
+                    </button>
+                    {formatOpen && editorRef.current && <TextFormatMenu view={editorRef.current} onClose={() => setFormatOpen(false)} />}
+                  </div>
                   <button className={`icon-button${preview ? ' on' : ''}`} onClick={() => setPreview((p) => !p)} title="Toggle preview (⌘E)" aria-label="Toggle preview">
                     {preview ? <IconPencil /> : <IconEye />}
                   </button>

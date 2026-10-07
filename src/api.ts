@@ -26,7 +26,7 @@ export interface Settings {
 }
 
 export type TagColors = Record<string, string>;
-export type MenuCommand = 'new' | 'search' | 'preview' | 'settings' | 'pin' | 'trash' | 'sidebar' | 'show-notes' | 'show-today';
+export type MenuCommand = 'new' | 'search' | 'preview' | 'settings' | 'pin' | 'trash' | 'sidebar' | 'show-notes' | 'show-today' | 'format';
 
 export interface NotesApi {
   platform: string;

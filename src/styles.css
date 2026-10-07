@@ -728,6 +728,60 @@ kbd { font-family: var(--ui-font); }
 .mini-more { width: 100%; padding: 4px 6px; border-radius: 6px; color: var(--accent); font-size: 12px; font-weight: 550; text-align: left; }
 .mini-more:hover { background: var(--bg-hover); }
 
+/* ---------- Text color and heading weight ---------- */
+
+/* !important so the formatting wins over Markdown syntax highlighting nested inside it. */
+.cm-format-color, .cm-format-color * { color: var(--format-color) !important; }
+.cm-format-normal, .cm-format-normal * { font-weight: 400 !important; }
+
+.toolbar-actions .menu-anchor { display: inline-flex; }
+.icon-button:disabled { opacity: 0.35; background: none; }
+
+.format-menu {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  z-index: 40;
+  width: 272px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  cursor: default;
+}
+.format-section-title { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+.format-hint { margin: 3px 0 8px; font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+.format-swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.format-swatch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--tag-bg, var(--bg-input));
+  border: 2px solid transparent;
+  font-family: var(--note-font);
+  font-size: 16px;
+  font-weight: 650;
+}
+.format-swatch span { color: var(--tag-fg, var(--text)); }
+.format-swatch:hover { border-color: var(--border-strong); }
+.format-swatch.selected { border-color: var(--accent); }
+.format-swatch.default { background: var(--bg); border-color: var(--border-strong); }
+.format-swatch.default.selected { border-color: var(--accent); }
+.format-swatch.custom { background: var(--bg-input); overflow: hidden; }
+.format-swatch.custom span { color: var(--custom-color, var(--text-muted)); }
+.format-swatch.custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.format-menu .context-sep { margin: 12px 0 10px; }
+
+.format-toggle { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 4px 2px; font-weight: 500; }
+.switch { position: relative; width: 30px; height: 18px; border-radius: 9px; background: var(--border-strong); transition: background 0.15s; flex-shrink: 0; }
+.switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 0.15s; }
+.switch.on { background: var(--accent); }
+.switch.on::after { transform: translateX(12px); }
+
 /* ---------- Rendered Markdown ---------- */
 
 .markdown { font-family: var(--note-font); font-size: var(--note-size); line-height: 1.7; color: var(--text); overflow-wrap: break-word; }

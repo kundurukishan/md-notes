@@ -198,6 +198,7 @@ function buildMenu() {
         { label: 'Notes', accelerator: 'CmdOrCtrl+1', click: () => sendCommand('show-notes') },
         { label: 'Today', accelerator: 'CmdOrCtrl+2', click: () => sendCommand('show-today') },
         { type: 'separator' },
+        { label: 'Text Color…', accelerator: 'CmdOrCtrl+Shift+C', click: () => sendCommand('format') },
         { label: 'Toggle Preview', accelerator: 'CmdOrCtrl+E', click: () => sendCommand('preview') },
         { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+\\', click: () => sendCommand('sidebar') },
         { type: 'separator' },

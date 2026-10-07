@@ -5,6 +5,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { tags as t } from '@lezer/highlight';
+import { skipFormatting, textFormatting } from './richtextEditor';
 
 // Styles the Markdown source so it reads almost like rendered text: headings
 // are larger, emphasis is applied, and the syntax marks fade into the background.
@@ -47,6 +48,7 @@ export function Editor({ docKey, value, onChange, editorRef }: EditorProps) {
         markdown({ base: markdownLanguage }),
         syntaxHighlighting(markdownStyle),
         placeholder('Start writing…'),
+        textFormatting(),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) onChangeRef.current(update.state.doc.toString());
@@ -75,7 +77,7 @@ export function Editor({ docKey, value, onChange, editorRef }: EditorProps) {
   useEffect(() => {
     const v = view.current;
     if (v && v.state.doc.toString() !== value) {
-      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
+      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value }, annotations: skipFormatting.of(true) });
     }
   }, [value]);
 

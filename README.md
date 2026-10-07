@@ -9,6 +9,7 @@ A local-first Markdown notes and tasks app for macOS. This repo also contains a 
 - **Plain Markdown files on your Mac.** Each note is a `.md` file with YAML frontmatter in `~/Documents/MD Notes` by default. You can change the folder in Settings. Edits made in other editors show up live.
 - **Fast capture.** `⌘N` creates a note and autosave runs as you type. Empty notes are discarded when you leave them. Search is instant and supports `#tag` filters.
 - **Live Markdown editor.** Built on CodeMirror. Headings, bold, italics, links and code are styled as you type, and lists and checklists continue when you press Enter. `⌘E` switches to a rendered preview where you can tick checkboxes.
+- **Text color.** Color any line, heading or selected words with the tag palette or any custom color, and turn bold off for individual headings (see [Text color](#text-color)).
 - **Tasks.** Google Tasks-style lists with subtasks, details, due dates and a Today view of everything overdue or due today. Each list is a plain Markdown file (see [Tasks](#tasks)).
 - **Colored tags, shared by notes and tasks.** Add tags under a note's title or in a task's details (with autocomplete). Click a tag in the sidebar to see its open tasks and notes together. Right-click a tag to pick one of 10 colors, rename it, or delete it everywhere.
 - **Fonts.** IBM Plex Sans, Roboto, Inter, IBM Plex Serif, Lora, IBM Plex Mono, JetBrains Mono and the system font are all bundled, so they work offline. You can also adjust text size and line width.
@@ -19,6 +20,24 @@ A local-first Markdown notes and tasks app for macOS. This repo also contains a 
 | ![Preview with checkboxes](docs/preview.png) | ![Dark mode](docs/dark.png) |
 
 ![Settings](docs/settings.png)
+
+## Text color
+
+![Text color menu](docs/text-color.png)
+
+Click the **A** button in the editor toolbar (or press **⇧⌘C**):
+
+- **Color:** pick one of the 10 palette colors, **+** for any custom color, or the plain **A** for the default color. With text selected, only the selection changes; otherwise the whole line does (list, task and heading markers stay as they are).
+- **Heading bold:** with the cursor on a heading, the **Bold** switch turns bold off (or back on) for just that heading.
+
+Formatting is saved as inline HTML, which is valid Markdown, so the file stays readable everywhere:
+
+```markdown
+## <span style="color: #2860b8; font-weight: normal">Goals</span>
+Ship the <span style="color: #c1352b">redesign</span> today
+```
+
+In MD Notes the tags are hidden while you edit. Obsidian, Typora and VS Code show the colors too; apps that don't allow HTML (like GitHub) show the plain text. Palette colors switch to their dark-mode versions automatically; custom colors stay exactly as picked.
 
 ## Tasks
 
@@ -95,6 +114,7 @@ npm run dist     # build a .dmg into release/
 | `⌘2` | Today |
 | `⌘F` | Search notes |
 | `⌘E` | Toggle preview |
+| `⇧⌘C` | Text color and heading weight |
 | `⇧⌘P` | Pin / unpin |
 | `⌘⌫` | Move to trash |
 | `⌘\` | Toggle sidebar |
