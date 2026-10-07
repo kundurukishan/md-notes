@@ -4,7 +4,8 @@ import { api, isDesktop, type MenuCommand, type Note, type Settings, type TagCol
 import { Editor } from './Editor';
 import { Preview } from './Preview';
 import { TextFormatMenu } from './TextFormatMenu';
-import { stripFormatting } from './richtext';
+import { displayColor, stripFormatting } from './richtext';
+import { formatState, setTextColor, toggleHeadingBold } from './richtextEditor';
 import { SettingsDialog } from './SettingsDialog';
 import { TagChip, TagInput } from './TagInput';
 import { TAG_COLORS, fontStack, tagColor } from './theme';
@@ -75,6 +76,9 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState(false);
   const [formatOpen, setFormatOpen] = useState(false);
+  // The formatting menu applies to the note title or to the note text.
+  const [formatTarget, setFormatTarget] = useState<'title' | 'body'>('body');
+  const [, setFormatTick] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [tagMenu, setTagMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
@@ -114,7 +118,7 @@ export default function App() {
       if (!note || version === (saved.current.get(key) ?? 0)) return;
 
       const promise = api
-        .saveNote({ id: note.id, title: note.title, body: note.body, tags: note.tags, pinned: note.pinned })
+        .saveNote({ id: note.id, title: note.title, body: note.body, tags: note.tags, pinned: note.pinned, titleColor: note.titleColor ?? null, titleBold: note.titleBold !== false })
         .then((res) => {
           saved.current.set(key, version);
           commit((prev) => prev.map((n) => (n.key === key ? { ...n, id: res.id, updated: res.updated, created: res.created } : n)));
@@ -141,7 +145,7 @@ export default function App() {
   );
 
   const updateNote = useCallback(
-    (key: string, patch: Partial<Pick<Note, 'title' | 'body' | 'tags' | 'pinned'>>) => {
+    (key: string, patch: Partial<Pick<Note, 'title' | 'body' | 'tags' | 'pinned' | 'titleColor' | 'titleBold'>>) => {
       commit((prev) => prev.map((n) => (n.key === key ? { ...n, ...patch, updated: new Date().toISOString() } : n)));
       versions.current.set(key, (versions.current.get(key) ?? 0) + 1);
       scheduleSave(key);
@@ -287,6 +291,27 @@ export default function App() {
     setSelectedKey(next?.key ?? null);
   }, [selected, visible, commit]);
 
+  // Opens the formatting menu for whatever has the cursor: the title, or the
+  // note text. In preview only the title can be formatted.
+  const toggleFormat = useCallback(() => {
+    if (formatOpen) {
+      setFormatOpen(false);
+      return;
+    }
+    const target = preview || document.activeElement === titleRef.current ? 'title' : 'body';
+    if (target === 'body' && !editorRef.current) return;
+    setFormatTarget(target);
+    setFormatOpen(true);
+  }, [formatOpen, preview]);
+
+  const closeFormat = useCallback(
+    (refocus: boolean) => {
+      setFormatOpen(false);
+      if (refocus) (formatTarget === 'title' ? titleRef.current : editorRef.current)?.focus();
+    },
+    [formatTarget],
+  );
+
   const togglePin = useCallback(() => {
     if (selected) updateNote(selected.key, { pinned: !selected.pinned });
   }, [selected, updateNote]);
@@ -381,7 +406,7 @@ export default function App() {
           setView({ kind: 'today' });
           break;
         case 'format':
-          if (view.kind === 'notes' && !preview && editorRef.current) setFormatOpen((o) => !o);
+          if (view.kind === 'notes') toggleFormat();
           break;
         case 'preview':
           if (view.kind === 'notes') setPreview((p) => !p);
@@ -400,7 +425,7 @@ export default function App() {
           break;
       }
     },
-    [createNote, togglePin, trashSelected, view.kind, preview],
+    [createNote, togglePin, trashSelected, toggleFormat, view.kind, preview],
   );
 
   const commandRef = useRef(runCommand);
@@ -737,15 +762,44 @@ export default function App() {
                     <button
                       className={`icon-button${formatOpen ? ' on' : ''}`}
                       data-format-toggle
-                      disabled={preview}
                       onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => setFormatOpen((o) => !o)}
-                      title="Text color and heading weight (⇧⌘C)"
+                      onClick={toggleFormat}
+                      title="Text color and bold (⇧⌘C)"
                       aria-label="Text formatting"
                     >
                       <IconTextColor />
                     </button>
-                    {formatOpen && editorRef.current && <TextFormatMenu view={editorRef.current} onClose={() => setFormatOpen(false)} />}
+                    {formatOpen && formatTarget === 'title' && (
+                      <TextFormatMenu
+                        target="the note title"
+                        color={selected.titleColor ?? null}
+                        onColor={(color) => updateNote(selected.key, { titleColor: color })}
+                        boldLabel="Title"
+                        bold={{ on: selected.titleBold !== false, onToggle: () => updateNote(selected.key, { titleBold: selected.titleBold === false }) }}
+                        boldHint=""
+                        onClose={closeFormat}
+                      />
+                    )}
+                    {formatOpen && formatTarget === 'body' && editorRef.current && (() => {
+                      const editor = editorRef.current;
+                      const state = formatState(editor.state);
+                      const refresh = () => setFormatTick((t) => t + 1);
+                      return (
+                        <TextFormatMenu
+                          target={editor.state.selection.main.empty ? 'the whole line' : 'the selected text'}
+                          color={state.color}
+                          onColor={(color) => {
+                            setTextColor(editor, color);
+                            refresh();
+                            editor.focus();
+                          }}
+                          boldLabel="Heading"
+                          bold={state.heading ? { on: state.headingBold, onToggle: () => (toggleHeadingBold(editor), refresh()) } : null}
+                          boldHint="Put the cursor on a heading (or in the title) to turn its bold on or off."
+                          onClose={closeFormat}
+                        />
+                      );
+                    })()}
                   </div>
                   <button className={`icon-button${preview ? ' on' : ''}`} onClick={() => setPreview((p) => !p)} title="Toggle preview (⌘E)" aria-label="Toggle preview">
                     {preview ? <IconPencil /> : <IconEye />}
@@ -763,6 +817,10 @@ export default function App() {
                   <textarea
                     ref={titleRef}
                     className="title-input"
+                    style={{
+                      color: selected.titleColor ? displayColor(selected.titleColor) : undefined,
+                      fontWeight: selected.titleBold === false ? 400 : undefined,
+                    }}
                     rows={1}
                     value={selected.title}
                     placeholder="Untitled"

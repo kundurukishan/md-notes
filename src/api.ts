@@ -9,6 +9,9 @@ export interface Note {
   body: string;
   tags: string[];
   pinned: boolean;
+  // Title formatting, saved in the note's frontmatter.
+  titleColor?: string | null;
+  titleBold?: boolean;
   created: string;
   updated: string;
 }
@@ -36,7 +39,7 @@ export interface NotesApi {
   revealFolder(): Promise<void>;
   listNotes(): Promise<Note[]>;
   createNote(input?: Partial<Pick<Note, 'title' | 'body' | 'tags'>>): Promise<Note>;
-  saveNote(note: Pick<Note, 'id' | 'title' | 'body' | 'tags' | 'pinned'>): Promise<Note>;
+  saveNote(note: Pick<Note, 'id' | 'title' | 'body' | 'tags' | 'pinned' | 'titleColor' | 'titleBold'>): Promise<Note>;
   trashNote(id: string): Promise<void>;
   getTagColors(): Promise<TagColors>;
   setTagColor(tag: string, color: string): Promise<TagColors>;

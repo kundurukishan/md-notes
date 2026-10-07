@@ -8,7 +8,12 @@ const META_DIR = '.mdnotes';
 const TRASH_DIR = '.trash';
 const TAGS_FILE = 'tags.json';
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
-const KNOWN_KEYS = new Set(['title', 'tags', 'pinned', 'created', 'updated']);
+const KNOWN_KEYS = new Set(['title', 'tags', 'pinned', 'created', 'updated', 'titleColor', 'titleBold']);
+const COLOR_RE = /^(#[0-9a-f]{3}|#[0-9a-f]{6}|[a-z]+)$/i;
+
+function cleanColor(value) {
+  return typeof value === 'string' && COLOR_RE.test(value.trim()) ? value.trim().toLowerCase() : null;
+}
 
 function parseNote(id, raw, stat) {
   let data = {};
@@ -39,6 +44,8 @@ function parseNote(id, raw, stat) {
     body,
     tags,
     pinned: data.pinned === true,
+    titleColor: cleanColor(data.titleColor),
+    titleBold: data.titleBold !== false,
     created: toIso(data.created) || (stat ? stat.birthtime.toISOString() : new Date().toISOString()),
     updated: toIso(data.updated) || (stat ? stat.mtime.toISOString() : new Date().toISOString()),
     extra,
@@ -50,11 +57,21 @@ function serializeNote(note) {
     title: note.title,
     tags: note.tags,
     ...(note.pinned ? { pinned: true } : {}),
+    // Title formatting is only written when it differs from the default.
+    ...(note.titleColor ? { titleColor: note.titleColor } : {}),
+    ...(note.titleBold === false ? { titleBold: false } : {}),
     created: note.created,
     updated: note.updated,
     ...(note.extra || {}),
   };
-  const yaml = YAML.stringify(data, { lineWidth: 0, collectionStyle: 'flow' }).trimEnd();
+  // One property per line, with lists such as tags kept on one line: [a, b].
+  const doc = new YAML.Document(data);
+  YAML.visit(doc, {
+    Seq(_key, node) {
+      node.flow = true;
+    },
+  });
+  const yaml = doc.toString({ lineWidth: 0, flowCollectionPadding: false }).trimEnd();
   return `---\n${yaml}\n---\n\n${note.body.replace(/^\n+/, '')}`;
 }
 
@@ -163,6 +180,8 @@ class NoteStore {
       body,
       tags: normalizeTags(tags),
       pinned: false,
+      titleColor: null,
+      titleBold: true,
       created: now,
       updated: now,
       extra: {},
@@ -193,6 +212,8 @@ class NoteStore {
       body: typeof input.body === 'string' ? input.body : existing?.body || '',
       tags: normalizeTags(Array.isArray(input.tags) ? input.tags : existing?.tags || []),
       pinned: typeof input.pinned === 'boolean' ? input.pinned : existing?.pinned || false,
+      titleColor: 'titleColor' in input ? cleanColor(input.titleColor) : existing?.titleColor ?? null,
+      titleBold: typeof input.titleBold === 'boolean' ? input.titleBold : existing?.titleBold ?? true,
       created: existing?.created || new Date().toISOString(),
       updated: new Date().toISOString(),
       extra: existing?.extra || {},
