@@ -24,6 +24,8 @@ A local-first Markdown notes and tasks app for macOS. This repo also contains a 
 
 ## Text color
 
+![Format panel](docs/format-panel.png)
+
 Click the **A** button in the editor toolbar (or press **⇧⌘C**) to open the **Format** panel on the right edge of the note. It stays open while you write and follows the cursor, formatting the title when the title has the cursor and the note text otherwise:
 
 - **Color:** pick one of the 10 palette colors, **+** for any custom color, or the plain **A** for the default color. With text selected, only the selection changes; otherwise the whole line does (list, task and heading markers stay as they are).
