@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme } = requir
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { NoteStore } = require('./store.cjs');
+const { NoteStore, DAILY_DIR } = require('./store.cjs');
 const { TaskStore } = require('./tasks.cjs');
 
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
@@ -98,12 +98,13 @@ async function seedWelcomeNote() {
 function watchFolders() {
   for (const w of watchers) w.close();
   watchers = [];
-  const watch = (dir, owner, onChange) => {
+  // `prefix` turns a filename into the owner's id (e.g. "Daily Notes/").
+  const watch = (dir, owner, onChange, prefix = '') => {
     let timer = null;
     try {
       watchers.push(
         fs.watch(dir, (_event, filename) => {
-          if (!filename || !/\.md$/i.test(filename) || filename.startsWith('.') || owner.isOwnWrite(filename)) return;
+          if (!filename || !/\.md$/i.test(filename) || filename.startsWith('.') || owner.isOwnWrite(prefix + filename)) return;
           clearTimeout(timer);
           timer = setTimeout(onChange, 300);
         }),
@@ -113,6 +114,7 @@ function watchFolders() {
     }
   };
   watch(store.dir, store, () => mainWindow?.webContents.send('notes:changed'));
+  watch(path.join(store.dir, DAILY_DIR), store, () => mainWindow?.webContents.send('notes:changed'), `${DAILY_DIR}/`);
   watch(tasks.dir, tasks, async () => {
     if (await tasks.serialize(() => tasks.load())) mainWindow?.webContents.send('tasks:changed');
   });
@@ -198,6 +200,7 @@ function buildMenu() {
         { label: 'Notes', accelerator: 'CmdOrCtrl+1', click: () => sendCommand('show-notes') },
         { label: 'Today', accelerator: 'CmdOrCtrl+2', click: () => sendCommand('show-today') },
         { type: 'separator' },
+        { label: 'Text Color…', accelerator: 'CmdOrCtrl+Shift+C', click: () => sendCommand('format') },
         { label: 'Toggle Preview', accelerator: 'CmdOrCtrl+E', click: () => sendCommand('preview') },
         { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+\\', click: () => sendCommand('sidebar') },
         { type: 'separator' },
@@ -258,17 +261,49 @@ function registerIpc() {
   ipcMain.handle('tasks:moveToList', (_e, fromId, toId, taskId) => tasks.moveToList(fromId, toId, taskId));
 }
 
-app.whenReady().then(async () => {
-  tasksModel = await import('../shared/tasks.mjs');
-  await loadSettings();
-  await openStore(settings.notesDir);
-  registerIpc();
-  buildMenu();
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+// MDNOTES_SMOKE_TEST=1 launches the packaged app, checks that notes and task
+// lists render, prints SMOKE_OK or SMOKE_FAIL, and quits. Used by CI.
+const smokeTest = Boolean(process.env.MDNOTES_SMOKE_TEST);
+
+async function runSmokeTest() {
+  const wc = mainWindow.webContents;
+  if (wc.isLoading()) await new Promise((resolve) => wc.once('did-finish-load', resolve));
+  const ok = await wc.executeJavaScript(`new Promise((resolve) => {
+    const started = Date.now();
+    const check = () => {
+      const notes = document.querySelectorAll('.note-item').length;
+      const lists = document.querySelectorAll('.lists-nav .nav-item').length;
+      if (notes > 0 && lists > 1) resolve(true);
+      else if (Date.now() - started > 15000) resolve(false);
+      else setTimeout(check, 200);
+    };
+    check();
+  })`);
+  console.log(ok ? 'SMOKE_OK' : 'SMOKE_FAIL');
+  app.exit(ok ? 0 : 1);
+}
+
+app
+  .whenReady()
+  .then(async () => {
+    tasksModel = await import('../shared/tasks.mjs');
+    await loadSettings();
+    if (smokeTest) settings.notesDir = path.join(app.getPath('temp'), `mdnotes-smoke-${process.pid}`);
+    await openStore(settings.notesDir);
+    registerIpc();
+    buildMenu();
+    createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+    if (smokeTest) await runSmokeTest();
+  })
+  .catch((err) => {
+    console.error(err);
+    if (smokeTest) console.log('SMOKE_FAIL');
+    else dialog.showErrorBox('MD Notes could not start', String(err?.stack || err));
+    app.exit(1);
   });
-});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

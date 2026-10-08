@@ -2,6 +2,14 @@ import { useMemo } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { toggleTask } from './markdown';
+import { displayColor } from './richtext';
+
+// Text colors from the palette are stored as hex values; show them with the
+// theme-aware palette colors so they stay readable in dark mode.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  const style = node.getAttribute?.('style');
+  if (style) node.setAttribute('style', style.replace(/(^|;)(\s*color\s*:\s*)(#[0-9a-f]{3,6})/gi, (_m, sep, prop, hex) => `${sep}${prop}${displayColor(hex)}`));
+});
 
 interface PreviewProps {
   body: string;

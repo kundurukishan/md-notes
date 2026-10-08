@@ -3,14 +3,19 @@ import type { EditorView } from '@codemirror/view';
 import { api, isDesktop, type MenuCommand, type Note, type Settings, type TagColors } from './api';
 import { Editor } from './Editor';
 import { Preview } from './Preview';
+import { FormatPanel } from './FormatPanel';
+import { displayColor, stripFormatting } from './richtext';
+import { formatState, setTextColor, toggleHeadingBold } from './richtextEditor';
 import { SettingsDialog } from './SettingsDialog';
 import { TagChip, TagInput } from './TagInput';
 import { TAG_COLORS, fontStack, tagColor } from './theme';
 import { collectOpen, openCount } from '../shared/tasks.mjs';
 import { useTasks } from './tasks/useTasks';
 import { ListPage, TaskMatches, TodayPage, TASK_DRAG_TYPE } from './tasks/TasksView';
-import { todayKey } from './tasks/dates';
+import { longDate, todayKey } from './tasks/dates';
+import { DailyCalendar } from './DailyCalendar';
 import {
+  IconCalendar,
   IconEye,
   IconList,
   IconNotes,
@@ -22,6 +27,7 @@ import {
   IconSidebar,
   IconSort,
   IconSun,
+  IconTextColor,
   IconTrash,
   IconUntagged,
 } from './Icons';
@@ -29,7 +35,7 @@ import {
 // `key` is a stable client-side identity; `id` is the filename and changes when
 // a note's title changes.
 type LocalNote = Note & { key: string };
-type Filter = { kind: 'all' } | { kind: 'pinned' } | { kind: 'untagged' } | { kind: 'tag'; tag: string };
+type Filter = { kind: 'all' } | { kind: 'daily' } | { kind: 'pinned' } | { kind: 'untagged' } | { kind: 'tag'; tag: string };
 type View = { kind: 'notes' } | { kind: 'list'; id: string; reveal: string | null } | { kind: 'today' };
 
 const SAVE_DELAY = 400;
@@ -37,7 +43,7 @@ let keySeq = 0;
 const newKey = () => `n${++keySeq}`;
 
 function snippet(body: string): string {
-  return body
+  return stripFormatting(body)
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/^\s*(#{1,6}\s+|>\s?|[-*+]\s+(\[[ xX]\]\s+)?|\d+[.)]\s+)/gm, '')
     .replace(/[*_~`]+/g, '')
@@ -71,6 +77,19 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>({ kind: 'all' });
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState(false);
+  // The format panel on the right; whether it's open is remembered per device.
+  const [formatOpen, setFormatOpen] = useState(() => {
+    try {
+      return localStorage.getItem('mdnotes:formatPanel') === 'open';
+    } catch {
+      return false;
+    }
+  });
+  // It formats the note title or the note text, whichever had the cursor last.
+  const [formatTarget, setFormatTarget] = useState<'title' | 'body'>('body');
+  const [, setFormatTick] = useState(0);
+  const formatOpenRef = useRef(formatOpen);
+  formatOpenRef.current = formatOpen;
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [tagMenu, setTagMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
@@ -110,7 +129,7 @@ export default function App() {
       if (!note || version === (saved.current.get(key) ?? 0)) return;
 
       const promise = api
-        .saveNote({ id: note.id, title: note.title, body: note.body, tags: note.tags, pinned: note.pinned })
+        .saveNote({ id: note.id, title: note.title, body: note.body, tags: note.tags, pinned: note.pinned, titleColor: note.titleColor ?? null, titleBold: note.titleBold !== false })
         .then((res) => {
           saved.current.set(key, version);
           commit((prev) => prev.map((n) => (n.key === key ? { ...n, id: res.id, updated: res.updated, created: res.created } : n)));
@@ -137,7 +156,7 @@ export default function App() {
   );
 
   const updateNote = useCallback(
-    (key: string, patch: Partial<Pick<Note, 'title' | 'body' | 'tags' | 'pinned'>>) => {
+    (key: string, patch: Partial<Pick<Note, 'title' | 'body' | 'tags' | 'pinned' | 'titleColor' | 'titleBold'>>) => {
       commit((prev) => prev.map((n) => (n.key === key ? { ...n, ...patch, updated: new Date().toISOString() } : n)));
       versions.current.set(key, (versions.current.get(key) ?? 0) + 1);
       scheduleSave(key);
@@ -197,7 +216,7 @@ export default function App() {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     const tagTerms = words.filter((w) => w.startsWith('#') && w.length > 1).map((w) => w.slice(1));
     const textTerms = words.filter((w) => !w.startsWith('#'));
-    if (filter.kind === 'pinned' || filter.kind === 'untagged') return [];
+    if (filter.kind === 'pinned' || filter.kind === 'untagged' || filter.kind === 'daily') return [];
     if (filter.kind === 'all' && !words.length) return [];
     return collectOpen(tasks.lists, (t) => {
       if (filter.kind === 'tag' && !t.tags.includes(filter.tag)) return false;
@@ -220,14 +239,17 @@ export default function App() {
     const sort = settings?.sort ?? 'updated';
     return notes
       .filter((n) => {
+        if (filter.kind === 'daily' && !n.daily) return false;
         if (filter.kind === 'pinned' && !n.pinned) return false;
         if (filter.kind === 'untagged' && n.tags.length) return false;
         if (filter.kind === 'tag' && !n.tags.includes(filter.tag)) return false;
         if (!tagTerms.every((t) => n.tags.some((tag) => tag.startsWith(t)))) return false;
-        const hay = `${n.title}\n${n.body}`.toLowerCase();
+        const hay = `${n.title}\n${stripFormatting(n.body)}`.toLowerCase();
         return textTerms.every((w) => hay.includes(w));
       })
       .sort((a, b) => {
+        // Daily notes are listed by date, newest first.
+        if (filter.kind === 'daily') return (b.daily ?? '').localeCompare(a.daily ?? '');
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
         if (sort === 'title') return (a.title || 'Untitled').localeCompare(b.title || 'Untitled');
         if (sort === 'created') return b.created.localeCompare(a.created);
@@ -236,6 +258,7 @@ export default function App() {
   }, [notes, filter, query, settings?.sort]);
 
   const selected = notes.find((n) => n.key === selectedKey) ?? null;
+  const dailyDates = useMemo(() => new Set(notes.flatMap((n) => (n.daily ? [n.daily] : []))), [notes]);
 
   // ---- Actions ------------------------------------------------------------
 
@@ -244,9 +267,10 @@ export default function App() {
       const prev = notesRef.current.find((n) => n.key === selectedKey);
       if (prev && prev.key !== key) {
         void flush(prev.key).then(async () => {
-          // Discard notes that were created but never written in.
+          // Discard notes that were created but never written in (for daily
+          // notes, which start with a date title, an empty body is enough).
           const current = notesRef.current.find((n) => n.key === prev.key);
-          if (current && !current.title.trim() && !current.body.trim()) {
+          if (current && !current.body.trim() && (!current.title.trim() || current.daily)) {
             await api.trashNote(current.id).catch(() => {});
             commit((list) => list.filter((n) => n.key !== prev.key));
           }
@@ -257,7 +281,26 @@ export default function App() {
     [selectedKey, flush, commit],
   );
 
+  // Opens the daily note for `date` (today by default), creating it if
+  // needed, with the cursor in the text.
+  const openDaily = useCallback(async (date: string = todayKey()) => {
+    setFilter({ kind: 'daily' });
+    setView({ kind: 'notes' });
+    setQuery('');
+    setPreview(false);
+    let local = notesRef.current.find((n) => n.daily === date);
+    if (!local) {
+      const note = await api.createNote({ daily: date, title: longDate(date) });
+      local = notesRef.current.find((n) => n.id === note.id) ?? { ...note, key: newKey() };
+      const added = local;
+      commit((prev) => (prev.some((n) => n.key === added.key) ? prev : [added, ...prev]));
+    }
+    select(local.key);
+    requestAnimationFrame(() => editorRef.current?.focus());
+  }, [commit, select]);
+
   const createNote = useCallback(async () => {
+    if (filter.kind === 'daily') return openDaily();
     const tags = filter.kind === 'tag' ? [filter.tag] : [];
     const note = await api.createNote({ tags });
     const local: LocalNote = { ...note, key: newKey() };
@@ -267,7 +310,7 @@ export default function App() {
     setPreview(false);
     select(local.key);
     requestAnimationFrame(() => titleRef.current?.focus());
-  }, [filter, commit, select]);
+  }, [filter, commit, select, openDaily]);
 
   const trashSelected = useCallback(async () => {
     if (!selected) return;
@@ -282,6 +325,26 @@ export default function App() {
     commit((prev) => prev.filter((n) => n.key !== selected.key));
     setSelectedKey(next?.key ?? null);
   }, [selected, visible, commit]);
+
+  const showFormatPanel = useCallback((open: boolean) => {
+    setFormatOpen(open);
+    try {
+      localStorage.setItem('mdnotes:formatPanel', open ? 'open' : 'closed');
+    } catch {
+      // storage unavailable: the panel just won't be remembered
+    }
+  }, []);
+
+  const toggleFormat = useCallback(() => {
+    if (!formatOpen && document.activeElement === titleRef.current) setFormatTarget('title');
+    showFormatPanel(!formatOpen);
+  }, [formatOpen, showFormatPanel]);
+
+  // Keeps the panel in step with the editor's selection and focus.
+  const onEditorActivity = useCallback((editor: EditorView) => {
+    if (editor.hasFocus) setFormatTarget('body');
+    if (formatOpenRef.current) setFormatTick((t) => t + 1);
+  }, []);
 
   const togglePin = useCallback(() => {
     if (selected) updateNote(selected.key, { pinned: !selected.pinned });
@@ -376,6 +439,9 @@ export default function App() {
         case 'show-today':
           setView({ kind: 'today' });
           break;
+        case 'format':
+          if (view.kind === 'notes') toggleFormat();
+          break;
         case 'preview':
           if (view.kind === 'notes') setPreview((p) => !p);
           break;
@@ -393,7 +459,7 @@ export default function App() {
           break;
       }
     },
-    [createNote, togglePin, trashSelected, view.kind],
+    [createNote, togglePin, trashSelected, toggleFormat, view.kind, preview],
   );
 
   const commandRef = useRef(runCommand);
@@ -465,14 +531,59 @@ export default function App() {
 
   // ---- Render -------------------------------------------------------------
 
+  // The format panel targets the title while it has the cursor (or in
+  // preview, where the text can't be edited), and the note text otherwise.
+  const renderFormatPanel = (note: LocalNote) => {
+    const editor = editorRef.current;
+    if (preview || formatTarget === 'title' || !editor) {
+      return (
+        <FormatPanel
+          target="the note title"
+          color={note.titleColor ?? null}
+          onColor={(color) => updateNote(note.key, { titleColor: color })}
+          boldLabel="Title"
+          bold={{ on: note.titleBold !== false, onToggle: () => updateNote(note.key, { titleBold: note.titleBold === false }) }}
+          boldHint=""
+          onClose={() => showFormatPanel(false)}
+        />
+      );
+    }
+    const state = formatState(editor.state);
+    const refresh = () => setFormatTick((t) => t + 1);
+    return (
+      <FormatPanel
+        target={editor.state.selection.main.empty ? 'the whole line' : 'the selected text'}
+        color={state.color}
+        onColor={(color) => {
+          setTextColor(editor, color);
+          refresh();
+          editor.focus();
+        }}
+        boldLabel="Heading"
+        bold={state.heading ? { on: state.headingBold, onToggle: () => (toggleHeadingBold(editor), refresh()) } : null}
+        boldHint="Put the cursor on a heading, or in the title, to turn its bold on or off."
+        onClose={() => showFormatPanel(false)}
+      />
+    );
+  };
+
   const filterLabel =
-    filter.kind === 'all' ? 'All notes' : filter.kind === 'pinned' ? 'Pinned' : filter.kind === 'untagged' ? 'Untagged' : `#${filter.tag}`;
+    filter.kind === 'all'
+      ? 'All notes'
+      : filter.kind === 'daily'
+        ? 'Daily Notes'
+        : filter.kind === 'pinned'
+          ? 'Pinned'
+          : filter.kind === 'untagged'
+            ? 'Untagged'
+            : `#${filter.tag}`;
   const counts = {
     all: notes.length,
     pinned: notes.filter((n) => n.pinned).length,
     untagged: notes.filter((n) => !n.tags.length).length,
+    daily: notes.filter((n) => n.daily).length,
   };
-  const words = selected ? (selected.body.match(/\S+/g) ?? []).length : 0;
+  const words = selected ? (stripFormatting(selected.body).match(/\S+/g) ?? []).length : 0;
   const nextSort = { updated: 'created', created: 'title', title: 'updated' } as const;
   const sortLabel = { updated: 'Last edited', created: 'Date created', title: 'Title' };
 
@@ -491,6 +602,13 @@ export default function App() {
             <nav className="nav">
               <button className={`nav-item${view.kind === 'notes' && filter.kind === 'all' ? ' active' : ''}`} onClick={() => showNotes({ kind: 'all' })}>
                 <IconNotes /> All notes <span className="count">{counts.all}</span>
+              </button>
+              <button
+                className={`nav-item${view.kind === 'notes' && filter.kind === 'daily' ? ' active' : ''}`}
+                onClick={() => void openDaily()}
+                title="Open today's daily note"
+              >
+                <IconCalendar /> Daily Notes <span className="count">{counts.daily}</span>
               </button>
               <button className={`nav-item${view.kind === 'notes' && filter.kind === 'pinned' ? ' active' : ''}`} onClick={() => showNotes({ kind: 'pinned' })}>
                 <IconPin /> Pinned <span className="count">{counts.pinned}</span>
@@ -677,6 +795,7 @@ export default function App() {
               )}
             </div>
             <div className="note-list">
+              {filter.kind === 'daily' && <DailyCalendar noteDates={dailyDates} selected={selected?.daily ?? null} onPick={(date) => void openDaily(date)} />}
               <TaskMatches rows={taskMatches} tasks={tasks} onOpen={openTask} />
               {taskMatches.length > 0 && visible.length > 0 && <div className="task-matches-label notes-label">Notes</div>}
               {visible.length === 0 && (
@@ -724,6 +843,16 @@ export default function App() {
                   <button className={`icon-button${selected.pinned ? ' on' : ''}`} onClick={togglePin} title="Pin note (⇧⌘P)" aria-label="Pin note">
                     <IconPin />
                   </button>
+                  <button
+                    className={`icon-button${formatOpen ? ' on' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={toggleFormat}
+                    title={formatOpen ? 'Hide format panel (⇧⌘C)' : 'Show format panel: text color and bold (⇧⌘C)'}
+                    aria-label="Text formatting"
+                    aria-pressed={formatOpen}
+                  >
+                    <IconTextColor />
+                  </button>
                   <button className={`icon-button${preview ? ' on' : ''}`} onClick={() => setPreview((p) => !p)} title="Toggle preview (⌘E)" aria-label="Toggle preview">
                     {preview ? <IconPencil /> : <IconEye />}
                   </button>
@@ -734,60 +863,76 @@ export default function App() {
               )}
             </div>
 
-            {selected ? (
-              <div className="document-scroll">
-                <article className="document">
-                  <textarea
-                    ref={titleRef}
-                    className="title-input"
-                    rows={1}
-                    value={selected.title}
-                    placeholder="Untitled"
-                    spellCheck
-                    onChange={(e) => updateNote(selected.key, { title: e.target.value.replace(/\n/g, ' ') })}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || (e.key === 'ArrowDown' && !preview)) {
-                        e.preventDefault();
-                        editorRef.current?.focus();
-                      }
-                    }}
-                  />
-                  <div className="properties">
-                    <div className="property">
-                      <span className="property-label">Tags</span>
-                      <TagInput
-                        tags={selected.tags}
-                        allTags={tagNames}
-                        colors={colors}
-                        onChange={(tags) => updateNote(selected.key, { tags })}
-                        onSelectTag={(tag) => setFilter({ kind: 'tag', tag })}
+            <div className="editor-body">
+              <div className="editor-main">
+                {selected ? (
+                  <div className="document-scroll">
+                    <article className="document">
+                      <textarea
+                        ref={titleRef}
+                        className="title-input"
+                        style={{
+                          color: selected.titleColor ? displayColor(selected.titleColor) : undefined,
+                          fontWeight: selected.titleBold === false ? 400 : undefined,
+                        }}
+                        rows={1}
+                        value={selected.title}
+                        placeholder="Untitled"
+                        spellCheck
+                        onFocus={() => setFormatTarget('title')}
+                        onChange={(e) => updateNote(selected.key, { title: e.target.value.replace(/\n/g, ' ') })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || (e.key === 'ArrowDown' && !preview)) {
+                            e.preventDefault();
+                            editorRef.current?.focus();
+                          }
+                        }}
                       />
-                    </div>
-                    <div className="property">
-                      <span className="property-label">Edited</span>
-                      <span className="property-value">{formatLong(selected.updated)}</span>
-                    </div>
+                      <div className="properties">
+                        <div className="property">
+                          <span className="property-label">Tags</span>
+                          <TagInput
+                            tags={selected.tags}
+                            allTags={tagNames}
+                            colors={colors}
+                            onChange={(tags) => updateNote(selected.key, { tags })}
+                            onSelectTag={(tag) => setFilter({ kind: 'tag', tag })}
+                          />
+                        </div>
+                        <div className="property">
+                          <span className="property-label">Edited</span>
+                          <span className="property-value">{formatLong(selected.updated)}</span>
+                        </div>
+                      </div>
+                      <div className={preview ? 'hidden' : ''}>
+                        <Editor
+                          docKey={selected.key}
+                          value={selected.body}
+                          onChange={(body) => updateNote(selected.key, { body })}
+                          editorRef={editorRef}
+                          onActivity={onEditorActivity}
+                        />
+                      </div>
+                      {preview && <Preview body={selected.body} onChange={(body) => updateNote(selected.key, { body })} />}
+                    </article>
                   </div>
-                  <div className={preview ? 'hidden' : ''}>
-                    <Editor docKey={selected.key} value={selected.body} onChange={(body) => updateNote(selected.key, { body })} editorRef={editorRef} />
+                ) : (
+                  <div className="no-selection">
+                    <IconNotes size={36} />
+                    <p>Select a note or create a new one.</p>
+                    <button className="button primary" onClick={() => void createNote()}>
+                      <IconPlus size={14} /> New note
+                    </button>
                   </div>
-                  {preview && <Preview body={selected.body} onChange={(body) => updateNote(selected.key, { body })} />}
-                </article>
+                )}
+                {selected && (
+                  <div className="status-bar">
+                    {words} {words === 1 ? 'word' : 'words'} · {selected.body.length} characters
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="no-selection">
-                <IconNotes size={36} />
-                <p>Select a note or create a new one.</p>
-                <button className="button primary" onClick={() => void createNote()}>
-                  <IconPlus size={14} /> New note
-                </button>
-              </div>
-            )}
-            {selected && (
-              <div className="status-bar">
-                {words} {words === 1 ? 'word' : 'words'} · {selected.body.length} characters
-              </div>
-            )}
+              {formatOpen && selected && renderFormatPanel(selected)}
+            </div>
           </main>
         </>
       )}

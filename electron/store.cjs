@@ -8,7 +8,16 @@ const META_DIR = '.mdnotes';
 const TRASH_DIR = '.trash';
 const TAGS_FILE = 'tags.json';
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
-const KNOWN_KEYS = new Set(['title', 'tags', 'pinned', 'created', 'updated']);
+// Daily notes live in their own folder, one file per day: Daily Notes/2026-10-08.md.
+// Their ids include the folder ("Daily Notes/2026-10-08.md").
+const DAILY_DIR = 'Daily Notes';
+const DAILY_RE = /^Daily Notes\/(\d{4}-\d{2}-\d{2})\.md$/;
+const KNOWN_KEYS = new Set(['title', 'tags', 'pinned', 'created', 'updated', 'titleColor', 'titleBold']);
+const COLOR_RE = /^(#[0-9a-f]{3}|#[0-9a-f]{6}|[a-z]+)$/i;
+
+function cleanColor(value) {
+  return typeof value === 'string' && COLOR_RE.test(value.trim()) ? value.trim().toLowerCase() : null;
+}
 
 function parseNote(id, raw, stat) {
   let data = {};
@@ -35,10 +44,13 @@ function parseNote(id, raw, stat) {
 
   return {
     id,
-    title: typeof data.title === 'string' ? data.title : id.replace(/\.md$/i, ''),
+    title: typeof data.title === 'string' ? data.title : path.basename(id).replace(/\.md$/i, ''),
     body,
     tags,
     pinned: data.pinned === true,
+    daily: id.match(DAILY_RE)?.[1] ?? null,
+    titleColor: cleanColor(data.titleColor),
+    titleBold: data.titleBold !== false,
     created: toIso(data.created) || (stat ? stat.birthtime.toISOString() : new Date().toISOString()),
     updated: toIso(data.updated) || (stat ? stat.mtime.toISOString() : new Date().toISOString()),
     extra,
@@ -50,11 +62,21 @@ function serializeNote(note) {
     title: note.title,
     tags: note.tags,
     ...(note.pinned ? { pinned: true } : {}),
+    // Title formatting is only written when it differs from the default.
+    ...(note.titleColor ? { titleColor: note.titleColor } : {}),
+    ...(note.titleBold === false ? { titleBold: false } : {}),
     created: note.created,
     updated: note.updated,
     ...(note.extra || {}),
   };
-  const yaml = YAML.stringify(data, { lineWidth: 0, collectionStyle: 'flow' }).trimEnd();
+  // One property per line, with lists such as tags kept on one line: [a, b].
+  const doc = new YAML.Document(data);
+  YAML.visit(doc, {
+    Seq(_key, node) {
+      node.flow = true;
+    },
+  });
+  const yaml = doc.toString({ lineWidth: 0, flowCollectionPadding: false }).trimEnd();
   return `---\n${yaml}\n---\n\n${note.body.replace(/^\n+/, '')}`;
 }
 
@@ -91,10 +113,10 @@ class NoteStore {
     this.recentWrites = new Map();
   }
 
+  // Note ids are filenames in the notes folder, or "Daily Notes/<date>.md".
   resolve(id) {
-    if (typeof id !== 'string' || !/\.md$/i.test(id) || id !== path.basename(id) || id.startsWith('.')) {
-      throw new Error(`Invalid note id: ${id}`);
-    }
+    if (typeof id !== 'string' || !/\.md$/i.test(id) || id.startsWith('.')) throw new Error(`Invalid note id: ${id}`);
+    if (id !== path.basename(id) && !DAILY_RE.test(id)) throw new Error(`Invalid note id: ${id}`);
     return path.join(this.dir, id);
   }
 
@@ -109,24 +131,18 @@ class NoteStore {
 
   async ensureDir() {
     await fs.mkdir(path.join(this.dir, META_DIR), { recursive: true });
+    await fs.mkdir(path.join(this.dir, DAILY_DIR), { recursive: true });
   }
 
   async list() {
     await this.ensureDir();
-    const entries = await fs.readdir(this.dir, { withFileTypes: true });
-    const notes = await Promise.all(
-      entries
-        .filter((e) => e.isFile() && /\.md$/i.test(e.name) && !e.name.startsWith('.'))
-        .map(async (e) => {
-          const file = path.join(this.dir, e.name);
-          try {
-            const [raw, stat] = await Promise.all([fs.readFile(file, 'utf8'), fs.stat(file)]);
-            return parseNote(e.name, raw, stat);
-          } catch {
-            return null;
-          }
-        }),
-    );
+    const ids = (await fs.readdir(this.dir, { withFileTypes: true }))
+      .filter((e) => e.isFile() && /\.md$/i.test(e.name) && !e.name.startsWith('.'))
+      .map((e) => e.name);
+    for (const name of await fs.readdir(path.join(this.dir, DAILY_DIR)).catch(() => [])) {
+      if (DAILY_RE.test(`${DAILY_DIR}/${name}`)) ids.push(`${DAILY_DIR}/${name}`);
+    }
+    const notes = await Promise.all(ids.map((id) => this.read(id).catch(() => null)));
     return notes.filter(Boolean);
   }
 
@@ -154,15 +170,26 @@ class NoteStore {
     }
   }
 
-  async create({ title = '', body = '', tags = [] } = {}) {
+  // Creates a note. With `daily` (a YYYY-MM-DD date) it creates that day's
+  // daily note, or returns it if it already exists.
+  async create({ title = '', body = '', tags = [], daily = null } = {}) {
     await this.ensureDir();
+    let id;
+    if (daily) {
+      id = `${DAILY_DIR}/${daily}.md`;
+      if (!DAILY_RE.test(id)) throw new Error(`Invalid date: ${daily}`);
+      if (await this.exists(id)) return this.read(id);
+    }
     const now = new Date().toISOString();
     const note = {
-      id: await this.uniqueName(title || 'Untitled'),
+      id: id ?? (await this.uniqueName(title || 'Untitled')),
+      daily: daily || null,
       title: title || '',
       body,
       tags: normalizeTags(tags),
       pinned: false,
+      titleColor: null,
+      titleBold: true,
       created: now,
       updated: now,
       extra: {},
@@ -193,12 +220,16 @@ class NoteStore {
       body: typeof input.body === 'string' ? input.body : existing?.body || '',
       tags: normalizeTags(Array.isArray(input.tags) ? input.tags : existing?.tags || []),
       pinned: typeof input.pinned === 'boolean' ? input.pinned : existing?.pinned || false,
+      titleColor: 'titleColor' in input ? cleanColor(input.titleColor) : existing?.titleColor ?? null,
+      titleBold: typeof input.titleBold === 'boolean' ? input.titleBold : existing?.titleBold ?? true,
       created: existing?.created || new Date().toISOString(),
       updated: new Date().toISOString(),
       extra: existing?.extra || {},
     };
 
-    const desired = await this.uniqueName(title || 'Untitled', existing ? input.id : null);
+    note.daily = input.id.match(DAILY_RE)?.[1] ?? null;
+    // Daily notes keep their date as filename whatever the title.
+    const desired = note.daily ? input.id : await this.uniqueName(title || 'Untitled', existing ? input.id : null);
     if (existing && desired !== input.id) {
       this.markWrite(input.id);
       this.markWrite(desired);
@@ -214,17 +245,20 @@ class NoteStore {
   // Moves a note into the .trash folder rather than deleting it outright.
   async trash(id) {
     const note = await this.read(id);
-    if (!note.title.trim() && !note.body.trim()) {
-      // Nothing worth keeping: an empty note is simply removed.
+    if (!note.body.trim() && (!note.title.trim() || note.daily)) {
+      // Nothing worth keeping (an empty note, or a daily note never written
+      // in): it is simply removed.
       this.markWrite(id);
       await fs.unlink(this.resolve(id));
       return;
     }
-    const trashDir = path.join(this.dir, TRASH_DIR);
+    // Daily notes go to .trash/Daily Notes, other notes to .trash.
+    const trashDir = path.join(this.dir, TRASH_DIR, path.dirname(id));
     await fs.mkdir(trashDir, { recursive: true });
-    let target = path.join(trashDir, id);
+    const name = path.basename(id);
+    let target = path.join(trashDir, name);
     if (await this.exists(path.join(TRASH_DIR, id))) {
-      target = path.join(trashDir, `${id.replace(/\.md$/i, '')} ${Date.now()}.md`);
+      target = path.join(trashDir, `${name.replace(/\.md$/i, '')} ${Date.now()}.md`);
     }
     this.markWrite(id);
     await fs.rename(this.resolve(id), target);
@@ -271,4 +305,4 @@ class NoteStore {
   }
 }
 
-module.exports = { NoteStore, parseNote, serializeNote, slugify, normalizeTag };
+module.exports = { NoteStore, parseNote, serializeNote, slugify, normalizeTag, DAILY_DIR };

@@ -1,7 +1,7 @@
 {
   "name": "md-notes",
   "productName": "MD Notes",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A local-first markdown notes app for macOS with colored tags and beautiful fonts.",
   "main": "electron/main.cjs",
   "author": "Kishan Kunduru",
@@ -12,7 +12,7 @@
     "dev:web": "vite",
     "build": "tsc --noEmit && vite build",
     "start": "npm run build && electron .",
-    "dist": "npm run build && electron-builder --mac",
+    "dist": "npm run build && electron-builder --mac --publish never",
     "typecheck": "tsc --noEmit",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test test/*.test.cjs test/*.test.mjs"
   },
@@ -26,19 +26,45 @@
       "package.json"
     ],
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "mac": {
       "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
       "target": [
         {
           "target": "dmg",
           "arch": [
-            "arm64",
-            "x64"
+            "universal"
           ]
         }
-      ]
+      ],
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "minimumSystemVersion": "12.0"
+    },
+    "dmg": {
+      "title": "${productName} ${version}",
+      "artifactName": "MD-Notes-${version}-mac.dmg",
+      "contents": [
+        {
+          "x": 150,
+          "y": 190,
+          "type": "file"
+        },
+        {
+          "x": 390,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     }
   },
   "dependencies": {

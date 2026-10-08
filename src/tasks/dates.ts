@@ -11,7 +11,7 @@ export function todayKey(offsetDays = 0): string {
   return toDateKey(d);
 }
 
-function parseKey(key: string): Date {
+export function parseKey(key: string): Date {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
@@ -33,4 +33,21 @@ export function dueLabel(key: string): { label: string; overdue: boolean; today:
     });
   }
   return { label, overdue: days < 0, today: days === 0 };
+}
+
+// "Thursday, October 8, 2026": the title of a day's daily note.
+export function longDate(key: string): string {
+  return parseKey(key).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+// First day of the week for the user's locale: 0 = Sunday, 1 = Monday, ...
+export function firstDayOfWeek(): number {
+  try {
+    const locale = new Intl.Locale(navigator.language) as Intl.Locale & { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } };
+    const day = (locale.getWeekInfo?.() ?? locale.weekInfo)?.firstDay;
+    if (day) return day % 7; // Intl uses 1 = Monday ... 7 = Sunday
+  } catch {
+    // older engines: fall through
+  }
+  return 0;
 }

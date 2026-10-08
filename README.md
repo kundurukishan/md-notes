@@ -9,9 +9,11 @@ A local-first Markdown notes and tasks app for macOS. This repo also contains a 
 - **Plain Markdown files on your Mac.** Each note is a `.md` file with YAML frontmatter in `~/Documents/MD Notes` by default. You can change the folder in Settings. Edits made in other editors show up live.
 - **Fast capture.** `⌘N` creates a note and autosave runs as you type. Empty notes are discarded when you leave them. Search is instant and supports `#tag` filters.
 - **Live Markdown editor.** Built on CodeMirror. Headings, bold, italics, links and code are styled as you type, and lists and checklists continue when you press Enter. `⌘E` switches to a rendered preview where you can tick checkboxes.
+- **Text color.** Color a note's title, any line or heading, or selected words with the tag palette or any custom color, and turn bold off for the title or individual headings (see [Text color](#text-color)).
+- **Daily Notes.** One note per day. Click **Daily Notes** in the sidebar to open today's note (it's created if needed). A month calendar above the list marks the days that have a note; click any day to open it or start one, and use the arrows or **Today** to move between months. They're saved in a `Daily Notes` folder inside your notes folder, named by date (`2026-10-08.md`).
 - **Tasks.** Google Tasks-style lists with subtasks, details, due dates and a Today view of everything overdue or due today. Each list is a plain Markdown file (see [Tasks](#tasks)).
 - **Colored tags, shared by notes and tasks.** Add tags under a note's title or in a task's details (with autocomplete). Click a tag in the sidebar to see its open tasks and notes together. Right-click a tag to pick one of 10 colors, rename it, or delete it everywhere.
-- **Fonts.** IBM Plex Sans, Roboto, Inter, IBM Plex Serif, Lora, IBM Plex Mono, JetBrains Mono and the system font are all bundled, so they work offline. You can also adjust text size and line width.
+- **Fonts.** IBM Plex Sans, Roboto, Inter, IBM Plex Serif, Lora, IBM Plex Mono, JetBrains Mono and the system font are all bundled, so they work offline. You can also adjust text size and line width. The sidebar uses your note font too.
 - **Light and dark themes**, pinned notes, sorting (last edited, created, title), and a word count.
 
 | Preview | Dark mode |
@@ -19,6 +21,25 @@ A local-first Markdown notes and tasks app for macOS. This repo also contains a 
 | ![Preview with checkboxes](docs/preview.png) | ![Dark mode](docs/dark.png) |
 
 ![Settings](docs/settings.png)
+
+## Text color
+
+![Format panel](docs/format-panel.png)
+
+Click the **A** button in the editor toolbar (or press **⇧⌘C**) to open the **Format** panel on the right edge of the note. It stays open while you write and follows the cursor, formatting the title when the title has the cursor and the note text otherwise:
+
+- **Color:** pick one of the 10 palette colors, **+** for any custom color, or the plain **A** for the default color. With text selected, only the selection changes; otherwise the whole line does (list, task and heading markers stay as they are).
+- **Heading bold:** with the cursor on a heading, the **Bold** switch turns bold off (or back on) for just that heading.
+- **Note title:** with the cursor in the note's title (or while previewing), the menu colors the title and its **Bold** switch turns the title's bold off. These are saved per note in the frontmatter as `titleColor` and `titleBold: false`.
+
+Formatting is saved as inline HTML, which is valid Markdown, so the file stays readable everywhere:
+
+```markdown
+## <span style="color: #2860b8; font-weight: normal">Goals</span>
+Ship the <span style="color: #c1352b">redesign</span> today
+```
+
+In MD Notes the tags are hidden while you edit. Obsidian, Typora and VS Code show the colors too; apps that don't allow HTML (like GitHub) show the plain text. Palette colors switch to their dark-mode versions automatically; custom colors stay exactly as picked.
 
 ## Tasks
 
@@ -60,6 +81,8 @@ Changing the folder doesn't move existing notes. To bring them along, copy the `
 title: Project kickoff
 tags: [work, urgent-items]
 pinned: true
+titleColor: "#2860b8"   # only when the title has a color
+titleBold: false        # only when the title isn't bold
 created: 2026-09-26T07:05:00.000Z
 updated: 2026-09-26T07:12:00.000Z
 ---
@@ -70,7 +93,11 @@ updated: 2026-09-26T07:12:00.000Z
 
 The filename follows the title. Frontmatter keys the app doesn't know about are preserved. Deleted notes go to `.trash/` inside the notes folder. Tag colors are stored in `.mdnotes/tags.json`.
 
-## Getting started
+## Installing
+
+Download the `.dmg`, drag MD Notes to Applications, and confirm the first launch. **[INSTALL.md](INSTALL.md)** walks through each step, including where to download the installer and how to publish a new release.
+
+## Development
 
 Requires Node.js 20+.
 
@@ -80,9 +107,7 @@ npm run dev      # run the app with hot reload
 npm run dist     # build a .dmg into release/
 ```
 
-`npm run dev:web` runs the UI in a browser with a localStorage-backed store, which is handy for UI work. `npm test` runs the storage tests.
-
-The built app is unsigned, so the first time you open it, right-click **MD Notes.app → Open**.
+`npm run dev:web` runs the UI in a browser with a localStorage-backed store, which is handy for UI work. `npm test` runs the storage and task tests.
 
 ## Keyboard shortcuts
 
@@ -93,6 +118,7 @@ The built app is unsigned, so the first time you open it, right-click **MD Notes
 | `⌘2` | Today |
 | `⌘F` | Search notes |
 | `⌘E` | Toggle preview |
+| `⇧⌘C` | Text color and bold (title, headings, text) |
 | `⇧⌘P` | Pin / unpin |
 | `⌘⌫` | Move to trash |
 | `⌘\` | Toggle sidebar |

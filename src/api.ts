@@ -9,6 +9,11 @@ export interface Note {
   body: string;
   tags: string[];
   pinned: boolean;
+  // Set for daily notes ("Daily Notes/<date>.md"): the note's date, YYYY-MM-DD.
+  daily?: string | null;
+  // Title formatting, saved in the note's frontmatter.
+  titleColor?: string | null;
+  titleBold?: boolean;
   created: string;
   updated: string;
 }
@@ -26,7 +31,7 @@ export interface Settings {
 }
 
 export type TagColors = Record<string, string>;
-export type MenuCommand = 'new' | 'search' | 'preview' | 'settings' | 'pin' | 'trash' | 'sidebar' | 'show-notes' | 'show-today';
+export type MenuCommand = 'new' | 'search' | 'preview' | 'settings' | 'pin' | 'trash' | 'sidebar' | 'show-notes' | 'show-today' | 'format';
 
 export interface NotesApi {
   platform: string;
@@ -35,8 +40,8 @@ export interface NotesApi {
   chooseFolder(): Promise<Settings>;
   revealFolder(): Promise<void>;
   listNotes(): Promise<Note[]>;
-  createNote(input?: Partial<Pick<Note, 'title' | 'body' | 'tags'>>): Promise<Note>;
-  saveNote(note: Pick<Note, 'id' | 'title' | 'body' | 'tags' | 'pinned'>): Promise<Note>;
+  createNote(input?: Partial<Pick<Note, 'title' | 'body' | 'tags' | 'daily'>>): Promise<Note>;
+  saveNote(note: Pick<Note, 'id' | 'title' | 'body' | 'tags' | 'pinned' | 'titleColor' | 'titleBold'>): Promise<Note>;
   trashNote(id: string): Promise<void>;
   getTagColors(): Promise<TagColors>;
   setTagColor(tag: string, color: string): Promise<TagColors>;
@@ -140,7 +145,12 @@ function createBrowserApi(): NotesApi {
     listNotes: async () => clone(state.notes),
     createNote: async (input = {}) => {
       const t = now();
-      const note: Note = { id: uniqueId(input.title || 'Untitled'), title: input.title || '', body: input.body || '', tags: norm(input.tags || []), pinned: false, created: t, updated: t };
+      if (input.daily) {
+        const existing = state.notes.find((n) => n.daily === input.daily);
+        if (existing) return clone(existing);
+      }
+      const id = input.daily ? `Daily Notes/${input.daily}.md` : uniqueId(input.title || 'Untitled');
+      const note: Note = { id, daily: input.daily ?? null, title: input.title || '', body: input.body || '', tags: norm(input.tags || []), pinned: false, created: t, updated: t };
       state.notes.push(note);
       persist();
       return clone(note);
@@ -151,7 +161,7 @@ function createBrowserApi(): NotesApi {
         ...(existing || { created: now() }),
         ...input,
         tags: norm(input.tags),
-        id: uniqueId(input.title || 'Untitled', existing ? input.id : undefined),
+        id: existing?.daily ? existing.id : uniqueId(input.title || 'Untitled', existing ? input.id : undefined),
         updated: now(),
       } as Note;
       state.notes = state.notes.filter((n) => n.id !== input.id).concat(note);
