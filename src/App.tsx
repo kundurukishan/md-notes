@@ -3,7 +3,7 @@ import type { EditorView } from '@codemirror/view';
 import { api, isDesktop, type MenuCommand, type Note, type Settings, type TagColors } from './api';
 import { Editor } from './Editor';
 import { Preview } from './Preview';
-import { TextFormatMenu } from './TextFormatMenu';
+import { FormatPanel } from './FormatPanel';
 import { displayColor, stripFormatting } from './richtext';
 import { formatState, setTextColor, toggleHeadingBold } from './richtextEditor';
 import { SettingsDialog } from './SettingsDialog';
@@ -14,6 +14,7 @@ import { useTasks } from './tasks/useTasks';
 import { ListPage, TaskMatches, TodayPage, TASK_DRAG_TYPE } from './tasks/TasksView';
 import { todayKey } from './tasks/dates';
 import {
+  IconCalendar,
   IconEye,
   IconList,
   IconNotes,
@@ -33,7 +34,7 @@ import {
 // `key` is a stable client-side identity; `id` is the filename and changes when
 // a note's title changes.
 type LocalNote = Note & { key: string };
-type Filter = { kind: 'all' } | { kind: 'pinned' } | { kind: 'untagged' } | { kind: 'tag'; tag: string };
+type Filter = { kind: 'all' } | { kind: 'daily' } | { kind: 'pinned' } | { kind: 'untagged' } | { kind: 'tag'; tag: string };
 type View = { kind: 'notes' } | { kind: 'list'; id: string; reveal: string | null } | { kind: 'today' };
 
 const SAVE_DELAY = 400;
@@ -75,10 +76,19 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>({ kind: 'all' });
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState(false);
-  const [formatOpen, setFormatOpen] = useState(false);
-  // The formatting menu applies to the note title or to the note text.
+  // The format panel on the right; whether it's open is remembered per device.
+  const [formatOpen, setFormatOpen] = useState(() => {
+    try {
+      return localStorage.getItem('mdnotes:formatPanel') === 'open';
+    } catch {
+      return false;
+    }
+  });
+  // It formats the note title or the note text, whichever had the cursor last.
   const [formatTarget, setFormatTarget] = useState<'title' | 'body'>('body');
   const [, setFormatTick] = useState(0);
+  const formatOpenRef = useRef(formatOpen);
+  formatOpenRef.current = formatOpen;
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [tagMenu, setTagMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
@@ -228,6 +238,7 @@ export default function App() {
     const sort = settings?.sort ?? 'updated';
     return notes
       .filter((n) => {
+        if (filter.kind === 'daily' && !n.daily) return false;
         if (filter.kind === 'pinned' && !n.pinned) return false;
         if (filter.kind === 'untagged' && n.tags.length) return false;
         if (filter.kind === 'tag' && !n.tags.includes(filter.tag)) return false;
@@ -236,6 +247,8 @@ export default function App() {
         return textTerms.every((w) => hay.includes(w));
       })
       .sort((a, b) => {
+        // Daily notes are listed by date, newest first.
+        if (filter.kind === 'daily') return (b.daily ?? '').localeCompare(a.daily ?? '');
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
         if (sort === 'title') return (a.title || 'Untitled').localeCompare(b.title || 'Untitled');
         if (sort === 'created') return b.created.localeCompare(a.created);
@@ -252,9 +265,10 @@ export default function App() {
       const prev = notesRef.current.find((n) => n.key === selectedKey);
       if (prev && prev.key !== key) {
         void flush(prev.key).then(async () => {
-          // Discard notes that were created but never written in.
+          // Discard notes that were created but never written in (for daily
+          // notes, which start with a date title, an empty body is enough).
           const current = notesRef.current.find((n) => n.key === prev.key);
-          if (current && !current.title.trim() && !current.body.trim()) {
+          if (current && !current.body.trim() && (!current.title.trim() || current.daily)) {
             await api.trashNote(current.id).catch(() => {});
             commit((list) => list.filter((n) => n.key !== prev.key));
           }
@@ -265,7 +279,27 @@ export default function App() {
     [selectedKey, flush, commit],
   );
 
+  // Opens today's daily note, creating it if needed, with the cursor in the text.
+  const openToday = useCallback(async () => {
+    const today = todayKey();
+    setFilter({ kind: 'daily' });
+    setView({ kind: 'notes' });
+    setQuery('');
+    setPreview(false);
+    let local = notesRef.current.find((n) => n.daily === today);
+    if (!local) {
+      const title = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const note = await api.createNote({ daily: today, title });
+      local = notesRef.current.find((n) => n.id === note.id) ?? { ...note, key: newKey() };
+      const added = local;
+      commit((prev) => (prev.some((n) => n.key === added.key) ? prev : [added, ...prev]));
+    }
+    select(local.key);
+    requestAnimationFrame(() => editorRef.current?.focus());
+  }, [commit, select]);
+
   const createNote = useCallback(async () => {
+    if (filter.kind === 'daily') return openToday();
     const tags = filter.kind === 'tag' ? [filter.tag] : [];
     const note = await api.createNote({ tags });
     const local: LocalNote = { ...note, key: newKey() };
@@ -275,7 +309,7 @@ export default function App() {
     setPreview(false);
     select(local.key);
     requestAnimationFrame(() => titleRef.current?.focus());
-  }, [filter, commit, select]);
+  }, [filter, commit, select, openToday]);
 
   const trashSelected = useCallback(async () => {
     if (!selected) return;
@@ -291,26 +325,25 @@ export default function App() {
     setSelectedKey(next?.key ?? null);
   }, [selected, visible, commit]);
 
-  // Opens the formatting menu for whatever has the cursor: the title, or the
-  // note text. In preview only the title can be formatted.
-  const toggleFormat = useCallback(() => {
-    if (formatOpen) {
-      setFormatOpen(false);
-      return;
+  const showFormatPanel = useCallback((open: boolean) => {
+    setFormatOpen(open);
+    try {
+      localStorage.setItem('mdnotes:formatPanel', open ? 'open' : 'closed');
+    } catch {
+      // storage unavailable: the panel just won't be remembered
     }
-    const target = preview || document.activeElement === titleRef.current ? 'title' : 'body';
-    if (target === 'body' && !editorRef.current) return;
-    setFormatTarget(target);
-    setFormatOpen(true);
-  }, [formatOpen, preview]);
+  }, []);
 
-  const closeFormat = useCallback(
-    (refocus: boolean) => {
-      setFormatOpen(false);
-      if (refocus) (formatTarget === 'title' ? titleRef.current : editorRef.current)?.focus();
-    },
-    [formatTarget],
-  );
+  const toggleFormat = useCallback(() => {
+    if (!formatOpen && document.activeElement === titleRef.current) setFormatTarget('title');
+    showFormatPanel(!formatOpen);
+  }, [formatOpen, showFormatPanel]);
+
+  // Keeps the panel in step with the editor's selection and focus.
+  const onEditorActivity = useCallback((editor: EditorView) => {
+    if (editor.hasFocus) setFormatTarget('body');
+    if (formatOpenRef.current) setFormatTick((t) => t + 1);
+  }, []);
 
   const togglePin = useCallback(() => {
     if (selected) updateNote(selected.key, { pinned: !selected.pinned });
@@ -449,8 +482,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  useEffect(() => setFormatOpen(false), [selectedKey, preview, view.kind]);
-
   // ---- Appearance ---------------------------------------------------------
 
   useEffect(() => {
@@ -499,12 +530,57 @@ export default function App() {
 
   // ---- Render -------------------------------------------------------------
 
+  // The format panel targets the title while it has the cursor (or in
+  // preview, where the text can't be edited), and the note text otherwise.
+  const renderFormatPanel = (note: LocalNote) => {
+    const editor = editorRef.current;
+    if (preview || formatTarget === 'title' || !editor) {
+      return (
+        <FormatPanel
+          target="the note title"
+          color={note.titleColor ?? null}
+          onColor={(color) => updateNote(note.key, { titleColor: color })}
+          boldLabel="Title"
+          bold={{ on: note.titleBold !== false, onToggle: () => updateNote(note.key, { titleBold: note.titleBold === false }) }}
+          boldHint=""
+          onClose={() => showFormatPanel(false)}
+        />
+      );
+    }
+    const state = formatState(editor.state);
+    const refresh = () => setFormatTick((t) => t + 1);
+    return (
+      <FormatPanel
+        target={editor.state.selection.main.empty ? 'the whole line' : 'the selected text'}
+        color={state.color}
+        onColor={(color) => {
+          setTextColor(editor, color);
+          refresh();
+          editor.focus();
+        }}
+        boldLabel="Heading"
+        bold={state.heading ? { on: state.headingBold, onToggle: () => (toggleHeadingBold(editor), refresh()) } : null}
+        boldHint="Put the cursor on a heading, or in the title, to turn its bold on or off."
+        onClose={() => showFormatPanel(false)}
+      />
+    );
+  };
+
   const filterLabel =
-    filter.kind === 'all' ? 'All notes' : filter.kind === 'pinned' ? 'Pinned' : filter.kind === 'untagged' ? 'Untagged' : `#${filter.tag}`;
+    filter.kind === 'all'
+      ? 'All notes'
+      : filter.kind === 'daily'
+        ? 'Daily Notes'
+        : filter.kind === 'pinned'
+          ? 'Pinned'
+          : filter.kind === 'untagged'
+            ? 'Untagged'
+            : `#${filter.tag}`;
   const counts = {
     all: notes.length,
     pinned: notes.filter((n) => n.pinned).length,
     untagged: notes.filter((n) => !n.tags.length).length,
+    daily: notes.filter((n) => n.daily).length,
   };
   const words = selected ? (stripFormatting(selected.body).match(/\S+/g) ?? []).length : 0;
   const nextSort = { updated: 'created', created: 'title', title: 'updated' } as const;
@@ -525,6 +601,13 @@ export default function App() {
             <nav className="nav">
               <button className={`nav-item${view.kind === 'notes' && filter.kind === 'all' ? ' active' : ''}`} onClick={() => showNotes({ kind: 'all' })}>
                 <IconNotes /> All notes <span className="count">{counts.all}</span>
+              </button>
+              <button
+                className={`nav-item${view.kind === 'notes' && filter.kind === 'daily' ? ' active' : ''}`}
+                onClick={() => void openToday()}
+                title="Open today's daily note"
+              >
+                <IconCalendar /> Daily Notes <span className="count">{counts.daily}</span>
               </button>
               <button className={`nav-item${view.kind === 'notes' && filter.kind === 'pinned' ? ' active' : ''}`} onClick={() => showNotes({ kind: 'pinned' })}>
                 <IconPin /> Pinned <span className="count">{counts.pinned}</span>
@@ -758,49 +841,16 @@ export default function App() {
                   <button className={`icon-button${selected.pinned ? ' on' : ''}`} onClick={togglePin} title="Pin note (⇧⌘P)" aria-label="Pin note">
                     <IconPin />
                   </button>
-                  <div className="menu-anchor">
-                    <button
-                      className={`icon-button${formatOpen ? ' on' : ''}`}
-                      data-format-toggle
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={toggleFormat}
-                      title="Text color and bold (⇧⌘C)"
-                      aria-label="Text formatting"
-                    >
-                      <IconTextColor />
-                    </button>
-                    {formatOpen && formatTarget === 'title' && (
-                      <TextFormatMenu
-                        target="the note title"
-                        color={selected.titleColor ?? null}
-                        onColor={(color) => updateNote(selected.key, { titleColor: color })}
-                        boldLabel="Title"
-                        bold={{ on: selected.titleBold !== false, onToggle: () => updateNote(selected.key, { titleBold: selected.titleBold === false }) }}
-                        boldHint=""
-                        onClose={closeFormat}
-                      />
-                    )}
-                    {formatOpen && formatTarget === 'body' && editorRef.current && (() => {
-                      const editor = editorRef.current;
-                      const state = formatState(editor.state);
-                      const refresh = () => setFormatTick((t) => t + 1);
-                      return (
-                        <TextFormatMenu
-                          target={editor.state.selection.main.empty ? 'the whole line' : 'the selected text'}
-                          color={state.color}
-                          onColor={(color) => {
-                            setTextColor(editor, color);
-                            refresh();
-                            editor.focus();
-                          }}
-                          boldLabel="Heading"
-                          bold={state.heading ? { on: state.headingBold, onToggle: () => (toggleHeadingBold(editor), refresh()) } : null}
-                          boldHint="Put the cursor on a heading (or in the title) to turn its bold on or off."
-                          onClose={closeFormat}
-                        />
-                      );
-                    })()}
-                  </div>
+                  <button
+                    className={`icon-button${formatOpen ? ' on' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={toggleFormat}
+                    title={formatOpen ? 'Hide format panel (⇧⌘C)' : 'Show format panel: text color and bold (⇧⌘C)'}
+                    aria-label="Text formatting"
+                    aria-pressed={formatOpen}
+                  >
+                    <IconTextColor />
+                  </button>
                   <button className={`icon-button${preview ? ' on' : ''}`} onClick={() => setPreview((p) => !p)} title="Toggle preview (⌘E)" aria-label="Toggle preview">
                     {preview ? <IconPencil /> : <IconEye />}
                   </button>
@@ -811,64 +861,76 @@ export default function App() {
               )}
             </div>
 
-            {selected ? (
-              <div className="document-scroll">
-                <article className="document">
-                  <textarea
-                    ref={titleRef}
-                    className="title-input"
-                    style={{
-                      color: selected.titleColor ? displayColor(selected.titleColor) : undefined,
-                      fontWeight: selected.titleBold === false ? 400 : undefined,
-                    }}
-                    rows={1}
-                    value={selected.title}
-                    placeholder="Untitled"
-                    spellCheck
-                    onChange={(e) => updateNote(selected.key, { title: e.target.value.replace(/\n/g, ' ') })}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || (e.key === 'ArrowDown' && !preview)) {
-                        e.preventDefault();
-                        editorRef.current?.focus();
-                      }
-                    }}
-                  />
-                  <div className="properties">
-                    <div className="property">
-                      <span className="property-label">Tags</span>
-                      <TagInput
-                        tags={selected.tags}
-                        allTags={tagNames}
-                        colors={colors}
-                        onChange={(tags) => updateNote(selected.key, { tags })}
-                        onSelectTag={(tag) => setFilter({ kind: 'tag', tag })}
+            <div className="editor-body">
+              <div className="editor-main">
+                {selected ? (
+                  <div className="document-scroll">
+                    <article className="document">
+                      <textarea
+                        ref={titleRef}
+                        className="title-input"
+                        style={{
+                          color: selected.titleColor ? displayColor(selected.titleColor) : undefined,
+                          fontWeight: selected.titleBold === false ? 400 : undefined,
+                        }}
+                        rows={1}
+                        value={selected.title}
+                        placeholder="Untitled"
+                        spellCheck
+                        onFocus={() => setFormatTarget('title')}
+                        onChange={(e) => updateNote(selected.key, { title: e.target.value.replace(/\n/g, ' ') })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || (e.key === 'ArrowDown' && !preview)) {
+                            e.preventDefault();
+                            editorRef.current?.focus();
+                          }
+                        }}
                       />
-                    </div>
-                    <div className="property">
-                      <span className="property-label">Edited</span>
-                      <span className="property-value">{formatLong(selected.updated)}</span>
-                    </div>
+                      <div className="properties">
+                        <div className="property">
+                          <span className="property-label">Tags</span>
+                          <TagInput
+                            tags={selected.tags}
+                            allTags={tagNames}
+                            colors={colors}
+                            onChange={(tags) => updateNote(selected.key, { tags })}
+                            onSelectTag={(tag) => setFilter({ kind: 'tag', tag })}
+                          />
+                        </div>
+                        <div className="property">
+                          <span className="property-label">Edited</span>
+                          <span className="property-value">{formatLong(selected.updated)}</span>
+                        </div>
+                      </div>
+                      <div className={preview ? 'hidden' : ''}>
+                        <Editor
+                          docKey={selected.key}
+                          value={selected.body}
+                          onChange={(body) => updateNote(selected.key, { body })}
+                          editorRef={editorRef}
+                          onActivity={onEditorActivity}
+                        />
+                      </div>
+                      {preview && <Preview body={selected.body} onChange={(body) => updateNote(selected.key, { body })} />}
+                    </article>
                   </div>
-                  <div className={preview ? 'hidden' : ''}>
-                    <Editor docKey={selected.key} value={selected.body} onChange={(body) => updateNote(selected.key, { body })} editorRef={editorRef} />
+                ) : (
+                  <div className="no-selection">
+                    <IconNotes size={36} />
+                    <p>Select a note or create a new one.</p>
+                    <button className="button primary" onClick={() => void createNote()}>
+                      <IconPlus size={14} /> New note
+                    </button>
                   </div>
-                  {preview && <Preview body={selected.body} onChange={(body) => updateNote(selected.key, { body })} />}
-                </article>
+                )}
+                {selected && (
+                  <div className="status-bar">
+                    {words} {words === 1 ? 'word' : 'words'} · {selected.body.length} characters
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="no-selection">
-                <IconNotes size={36} />
-                <p>Select a note or create a new one.</p>
-                <button className="button primary" onClick={() => void createNote()}>
-                  <IconPlus size={14} /> New note
-                </button>
-              </div>
-            )}
-            {selected && (
-              <div className="status-bar">
-                {words} {words === 1 ? 'word' : 'words'} · {selected.body.length} characters
-              </div>
-            )}
+              {formatOpen && selected && renderFormatPanel(selected)}
+            </div>
           </main>
         </>
       )}

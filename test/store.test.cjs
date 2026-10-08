@@ -119,3 +119,37 @@ test('title color and bold are saved in frontmatter only when set', async () => 
   // Invalid values are ignored.
   assert.equal(parseNote('x.md', '---\ntitleColor: "red; background: x"\n---\n').titleColor, null);
 });
+
+test('daily notes live in the Daily Notes folder, one per day', async () => {
+  const store = await tmpStore();
+  const note = await store.create({ daily: '2026-10-08', title: 'Thursday, October 8, 2026' });
+  assert.equal(note.id, 'Daily Notes/2026-10-08.md');
+  assert.equal(note.daily, '2026-10-08');
+  assert.equal(await store.exists('Daily Notes/2026-10-08.md'), true);
+
+  // Creating the same day again returns the existing note.
+  await store.save({ id: note.id, title: note.title, body: 'Standup at 10' });
+  const again = await store.create({ daily: '2026-10-08', title: 'ignored' });
+  assert.equal(again.body, 'Standup at 10');
+
+  // Renaming the title keeps the date as the filename.
+  const renamed = await store.save({ id: note.id, title: 'Launch day', body: 'Standup at 10' });
+  assert.equal(renamed.id, 'Daily Notes/2026-10-08.md');
+  assert.equal(renamed.daily, '2026-10-08');
+
+  await store.create({ title: 'Regular' });
+  const listed = await store.list();
+  assert.deepEqual(listed.map((n) => [n.id, n.daily]).sort(), [['Daily Notes/2026-10-08.md', '2026-10-08'], ['Regular.md', null]]);
+
+  // A daily note added by another app without frontmatter is titled by its date.
+  await fs.writeFile(path.join(store.dir, 'Daily Notes', '2026-10-09.md'), 'Hello');
+  assert.equal((await store.read('Daily Notes/2026-10-09.md')).title, '2026-10-09');
+
+  // Trash keeps the folder.
+  await store.trash(note.id);
+  assert.equal(await store.exists('.trash/Daily Notes/2026-10-08.md'), true);
+
+  assert.throws(() => store.resolve('Daily Notes/../evil.md'));
+  assert.throws(() => store.resolve('Other/2026-10-08.md'));
+  await assert.rejects(store.create({ daily: 'not-a-date' }));
+});

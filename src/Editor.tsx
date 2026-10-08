@@ -30,13 +30,17 @@ interface EditorProps {
   value: string;
   onChange: (value: string) => void;
   editorRef?: React.MutableRefObject<EditorView | null>;
+  // Called when the selection, text or focus changes.
+  onActivity?: (view: EditorView) => void;
 }
 
-export function Editor({ docKey, value, onChange, editorRef }: EditorProps) {
+export function Editor({ docKey, value, onChange, editorRef, onActivity }: EditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onActivityRef = useRef(onActivity);
+  onActivityRef.current = onActivity;
 
   const makeState = (doc: string) =>
     EditorState.create({
@@ -52,6 +56,7 @@ export function Editor({ docKey, value, onChange, editorRef }: EditorProps) {
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) onChangeRef.current(update.state.doc.toString());
+          if (update.docChanged || update.selectionSet || update.focusChanged) onActivityRef.current?.(update.view);
         }),
       ],
     });

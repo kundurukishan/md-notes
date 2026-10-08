@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme } = requir
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { NoteStore } = require('./store.cjs');
+const { NoteStore, DAILY_DIR } = require('./store.cjs');
 const { TaskStore } = require('./tasks.cjs');
 
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
@@ -98,12 +98,13 @@ async function seedWelcomeNote() {
 function watchFolders() {
   for (const w of watchers) w.close();
   watchers = [];
-  const watch = (dir, owner, onChange) => {
+  // `prefix` turns a filename into the owner's id (e.g. "Daily Notes/").
+  const watch = (dir, owner, onChange, prefix = '') => {
     let timer = null;
     try {
       watchers.push(
         fs.watch(dir, (_event, filename) => {
-          if (!filename || !/\.md$/i.test(filename) || filename.startsWith('.') || owner.isOwnWrite(filename)) return;
+          if (!filename || !/\.md$/i.test(filename) || filename.startsWith('.') || owner.isOwnWrite(prefix + filename)) return;
           clearTimeout(timer);
           timer = setTimeout(onChange, 300);
         }),
@@ -113,6 +114,7 @@ function watchFolders() {
     }
   };
   watch(store.dir, store, () => mainWindow?.webContents.send('notes:changed'));
+  watch(path.join(store.dir, DAILY_DIR), store, () => mainWindow?.webContents.send('notes:changed'), `${DAILY_DIR}/`);
   watch(tasks.dir, tasks, async () => {
     if (await tasks.serialize(() => tasks.load())) mainWindow?.webContents.send('tasks:changed');
   });
