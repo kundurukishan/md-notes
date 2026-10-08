@@ -12,7 +12,8 @@ import { TAG_COLORS, fontStack, tagColor } from './theme';
 import { collectOpen, openCount } from '../shared/tasks.mjs';
 import { useTasks } from './tasks/useTasks';
 import { ListPage, TaskMatches, TodayPage, TASK_DRAG_TYPE } from './tasks/TasksView';
-import { todayKey } from './tasks/dates';
+import { longDate, todayKey } from './tasks/dates';
+import { DailyCalendar } from './DailyCalendar';
 import {
   IconCalendar,
   IconEye,
@@ -215,7 +216,7 @@ export default function App() {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     const tagTerms = words.filter((w) => w.startsWith('#') && w.length > 1).map((w) => w.slice(1));
     const textTerms = words.filter((w) => !w.startsWith('#'));
-    if (filter.kind === 'pinned' || filter.kind === 'untagged') return [];
+    if (filter.kind === 'pinned' || filter.kind === 'untagged' || filter.kind === 'daily') return [];
     if (filter.kind === 'all' && !words.length) return [];
     return collectOpen(tasks.lists, (t) => {
       if (filter.kind === 'tag' && !t.tags.includes(filter.tag)) return false;
@@ -257,6 +258,7 @@ export default function App() {
   }, [notes, filter, query, settings?.sort]);
 
   const selected = notes.find((n) => n.key === selectedKey) ?? null;
+  const dailyDates = useMemo(() => new Set(notes.flatMap((n) => (n.daily ? [n.daily] : []))), [notes]);
 
   // ---- Actions ------------------------------------------------------------
 
@@ -279,17 +281,16 @@ export default function App() {
     [selectedKey, flush, commit],
   );
 
-  // Opens today's daily note, creating it if needed, with the cursor in the text.
-  const openToday = useCallback(async () => {
-    const today = todayKey();
+  // Opens the daily note for `date` (today by default), creating it if
+  // needed, with the cursor in the text.
+  const openDaily = useCallback(async (date: string = todayKey()) => {
     setFilter({ kind: 'daily' });
     setView({ kind: 'notes' });
     setQuery('');
     setPreview(false);
-    let local = notesRef.current.find((n) => n.daily === today);
+    let local = notesRef.current.find((n) => n.daily === date);
     if (!local) {
-      const title = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      const note = await api.createNote({ daily: today, title });
+      const note = await api.createNote({ daily: date, title: longDate(date) });
       local = notesRef.current.find((n) => n.id === note.id) ?? { ...note, key: newKey() };
       const added = local;
       commit((prev) => (prev.some((n) => n.key === added.key) ? prev : [added, ...prev]));
@@ -299,7 +300,7 @@ export default function App() {
   }, [commit, select]);
 
   const createNote = useCallback(async () => {
-    if (filter.kind === 'daily') return openToday();
+    if (filter.kind === 'daily') return openDaily();
     const tags = filter.kind === 'tag' ? [filter.tag] : [];
     const note = await api.createNote({ tags });
     const local: LocalNote = { ...note, key: newKey() };
@@ -309,7 +310,7 @@ export default function App() {
     setPreview(false);
     select(local.key);
     requestAnimationFrame(() => titleRef.current?.focus());
-  }, [filter, commit, select, openToday]);
+  }, [filter, commit, select, openDaily]);
 
   const trashSelected = useCallback(async () => {
     if (!selected) return;
@@ -604,7 +605,7 @@ export default function App() {
               </button>
               <button
                 className={`nav-item${view.kind === 'notes' && filter.kind === 'daily' ? ' active' : ''}`}
-                onClick={() => void openToday()}
+                onClick={() => void openDaily()}
                 title="Open today's daily note"
               >
                 <IconCalendar /> Daily Notes <span className="count">{counts.daily}</span>
@@ -794,6 +795,7 @@ export default function App() {
               )}
             </div>
             <div className="note-list">
+              {filter.kind === 'daily' && <DailyCalendar noteDates={dailyDates} selected={selected?.daily ?? null} onPick={(date) => void openDaily(date)} />}
               <TaskMatches rows={taskMatches} tasks={tasks} onOpen={openTask} />
               {taskMatches.length > 0 && visible.length > 0 && <div className="task-matches-label notes-label">Notes</div>}
               {visible.length === 0 && (

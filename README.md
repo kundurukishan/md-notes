@@ -10,10 +10,10 @@ A local-first Markdown notes and tasks app for macOS. This repo also contains a 
 - **Fast capture.** `⌘N` creates a note and autosave runs as you type. Empty notes are discarded when you leave them. Search is instant and supports `#tag` filters.
 - **Live Markdown editor.** Built on CodeMirror. Headings, bold, italics, links and code are styled as you type, and lists and checklists continue when you press Enter. `⌘E` switches to a rendered preview where you can tick checkboxes.
 - **Text color.** Color a note's title, any line or heading, or selected words with the tag palette or any custom color, and turn bold off for the title or individual headings (see [Text color](#text-color)).
-- **Daily Notes.** One note per day. Click **Daily Notes** in the sidebar to open today's note (it's created if needed) and see past days, newest first. They're saved in a `Daily Notes` folder inside your notes folder, named by date (`2026-10-08.md`).
+- **Daily Notes.** One note per day. Click **Daily Notes** in the sidebar to open today's note (it's created if needed). A month calendar above the list marks the days that have a note; click any day to open it or start one, and use the arrows or **Today** to move between months. They're saved in a `Daily Notes` folder inside your notes folder, named by date (`2026-10-08.md`).
 - **Tasks.** Google Tasks-style lists with subtasks, details, due dates and a Today view of everything overdue or due today. Each list is a plain Markdown file (see [Tasks](#tasks)).
 - **Colored tags, shared by notes and tasks.** Add tags under a note's title or in a task's details (with autocomplete). Click a tag in the sidebar to see its open tasks and notes together. Right-click a tag to pick one of 10 colors, rename it, or delete it everywhere.
-- **Fonts.** IBM Plex Sans, Roboto, Inter, IBM Plex Serif, Lora, IBM Plex Mono, JetBrains Mono and the system font are all bundled, so they work offline. You can also adjust text size and line width.
+- **Fonts.** IBM Plex Sans, Roboto, Inter, IBM Plex Serif, Lora, IBM Plex Mono, JetBrains Mono and the system font are all bundled, so they work offline. You can also adjust text size and line width. The sidebar uses your note font too.
 - **Light and dark themes**, pinned notes, sorting (last edited, created, title), and a word count.
 
 | Preview | Dark mode |
