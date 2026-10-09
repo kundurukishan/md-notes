@@ -74,14 +74,16 @@ The installer is written to `release/MD-Notes-<version>-mac.dmg`. The app itself
 
 ## Publishing a release (for maintainers)
 
-1. Update `"version"` in `package.json` and commit.
-2. Tag the commit and push the tag:
+1. Make sure `"version"` in `package.json` on `main` is the version you want to release (e.g. `0.2.0`).
+2. Do one of these:
+   - **From GitHub (no Terminal needed):** open **Actions → Build Mac installer → Run workflow**, keep the branch as `main`, tick **Publish release**, and click **Run workflow**.
+   - **From Terminal:** push a tag that matches the version:
+     ```bash
+     git tag v0.2.0 origin/main
+     git push origin v0.2.0
+     ```
+   - **From the Releases page:** **Draft a new release** with a new tag matching the version (e.g. `v0.2.0`) on `main`, and publish it.
 
-   ```bash
-   git tag v0.1.0
-   git push origin v0.1.0
-   ```
-
-The **Build Mac installer** workflow builds the `.dmg`, checks that the packaged app launches, and publishes a GitHub Release with the `.dmg` attached. You can also run the workflow by hand from the **Actions** tab (**Run workflow**). That builds an installer without publishing a release.
+The workflow builds the `.dmg`, checks that the packaged app launches, and publishes the **MD Notes v0.2.0** release with the installer attached (or attaches it to the release you created). A tag that doesn't match `package.json`'s version is rejected, so the release and the file name always agree. Running the workflow without **Publish release** just builds an installer you can download from the run.
 
 To remove the "can't verify" prompt from step 3, the app has to be signed with an Apple Developer ID certificate and notarized by Apple. This requires the Apple Developer Program ($99/year).

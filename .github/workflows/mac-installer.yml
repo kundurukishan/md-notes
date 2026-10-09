@@ -3,10 +3,18 @@ name: Build Mac installer
 # Builds MD-Notes-<version>-mac.dmg (universal: Apple Silicon + Intel).
 # - Runs on pushes and pull requests that change the app, and by hand from the
 #   Actions tab: the .dmg is attached to the run as an artifact.
-# - Pushing a tag like v0.1.0 also publishes a GitHub Release with the .dmg.
-#   (Path filters don't apply to tag pushes, so tags always build.)
+# - Publishing a release (tag v<version>, with the .dmg attached), either:
+#   - Actions → Build Mac installer → Run workflow on main with "Publish
+#     release" ticked: the tag comes from package.json's version, or
+#   - pushing a tag like v0.2.0 (or creating the release on GitHub, which
+#     creates the tag). Path filters don't apply to tag pushes.
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish a GitHub Release (tag v<package.json version>) with the .dmg. Only on main.'
+        type: boolean
+        default: false
   push:
     branches: ['**']
     tags: ['v*']
@@ -87,11 +95,24 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" release/*.dmg \
-            --title "MD Notes $GITHUB_REF_NAME" \
-            --notes "Download the .dmg below. See [INSTALL.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/INSTALL.md) for install steps." \
-            --verify-tag
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "$TAG" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match package.json version $VERSION. Bump the version first."
+            exit 1
+          fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            # The release already exists (e.g. created on GitHub, which also
+            # created the tag): attach or replace the installer.
+            gh release upload "$TAG" release/*.dmg --clobber
+          else
+            gh release create "$TAG" release/*.dmg \
+              --target "$GITHUB_SHA" \
+              --title "MD Notes $TAG" \
+              --notes "Download MD-Notes-$VERSION-mac.dmg below. It runs on Apple Silicon and Intel Macs with macOS 12 or later. See [INSTALL.md](https://github.com/${GITHUB_REPOSITORY}/blob/$TAG/INSTALL.md) for install steps, including the one-time security prompt on first launch."
+          fi
+          echo "Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
