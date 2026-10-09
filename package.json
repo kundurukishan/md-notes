@@ -1,7 +1,7 @@
 {
   "name": "md-notes",
   "productName": "MD Notes",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A local-first markdown notes app for macOS with colored tags and beautiful fonts.",
   "main": "electron/main.cjs",
   "author": "Kishan Kunduru",

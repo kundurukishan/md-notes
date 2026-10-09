@@ -120,6 +120,13 @@ function watchFolders() {
   });
 }
 
+// Painted before the page loads, so it should match the theme's background.
+function windowBackground() {
+  if (settings.theme === 'sepia') return '#fbf7f0';
+  const dark = settings.theme === 'dark' || (settings.theme !== 'light' && nativeTheme.shouldUseDarkColors);
+  return dark ? '#1e1e1f' : '#ffffff';
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -129,7 +136,7 @@ function createWindow() {
     title: 'MD Notes',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 18 },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff',
+    backgroundColor: windowBackground(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

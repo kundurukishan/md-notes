@@ -3,6 +3,7 @@ import type { EditorView } from '@codemirror/view';
 import { api, isDesktop, type MenuCommand, type Note, type Settings, type TagColors } from './api';
 import { Editor } from './Editor';
 import { Preview } from './Preview';
+import { FormatBar } from './FormatBar';
 import { FormatPanel } from './FormatPanel';
 import { displayColor, stripFormatting } from './richtext';
 import { formatState, setTextColor, toggleHeadingBold } from './richtextEditor';
@@ -27,7 +28,6 @@ import {
   IconSidebar,
   IconSort,
   IconSun,
-  IconTextColor,
   IconTrash,
   IconUntagged,
 } from './Icons';
@@ -87,9 +87,7 @@ export default function App() {
   });
   // It formats the note title or the note text, whichever had the cursor last.
   const [formatTarget, setFormatTarget] = useState<'title' | 'body'>('body');
-  const [, setFormatTick] = useState(0);
-  const formatOpenRef = useRef(formatOpen);
-  formatOpenRef.current = formatOpen;
+  const [formatTick, setFormatTick] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [tagMenu, setTagMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
@@ -343,7 +341,7 @@ export default function App() {
   // Keeps the panel in step with the editor's selection and focus.
   const onEditorActivity = useCallback((editor: EditorView) => {
     if (editor.hasFocus) setFormatTarget('body');
-    if (formatOpenRef.current) setFormatTick((t) => t + 1);
+    setFormatTick((t) => t + 1);
   }, []);
 
   const togglePin = useCallback(() => {
@@ -843,16 +841,6 @@ export default function App() {
                   <button className={`icon-button${selected.pinned ? ' on' : ''}`} onClick={togglePin} title="Pin note (⇧⌘P)" aria-label="Pin note">
                     <IconPin />
                   </button>
-                  <button
-                    className={`icon-button${formatOpen ? ' on' : ''}`}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={toggleFormat}
-                    title={formatOpen ? 'Hide format panel (⇧⌘C)' : 'Show format panel: text color and bold (⇧⌘C)'}
-                    aria-label="Text formatting"
-                    aria-pressed={formatOpen}
-                  >
-                    <IconTextColor />
-                  </button>
                   <button className={`icon-button${preview ? ' on' : ''}`} onClick={() => setPreview((p) => !p)} title="Toggle preview (⌘E)" aria-label="Toggle preview">
                     {preview ? <IconPencil /> : <IconEye />}
                   </button>
@@ -865,6 +853,9 @@ export default function App() {
 
             <div className="editor-body">
               <div className="editor-main">
+                {selected && (
+                  <FormatBar editor={editorRef.current} tick={formatTick} readOnly={preview} colorOpen={formatOpen} onToggleColor={toggleFormat} />
+                )}
                 {selected ? (
                   <div className="document-scroll">
                     <article className="document">

@@ -15,6 +15,7 @@ interface SettingsDialogProps {
 const THEMES: { value: Theme; label: string }[] = [
   { value: 'system', label: 'System' },
   { value: 'light', label: 'Light' },
+  { value: 'sepia', label: 'Sepia' },
   { value: 'dark', label: 'Dark' },
 ];
 
