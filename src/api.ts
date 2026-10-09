@@ -18,7 +18,7 @@ export interface Note {
   updated: string;
 }
 
-export type Theme = 'system' | 'light' | 'dark';
+export type Theme = 'system' | 'light' | 'sepia' | 'dark';
 export type SortKey = 'updated' | 'created' | 'title';
 
 export interface Settings {

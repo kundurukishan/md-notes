@@ -11,6 +11,24 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (style) node.setAttribute('style', style.replace(/(^|;)(\s*color\s*:\s*)(#[0-9a-f]{3,6})/gi, (_m, sep, prop, hex) => `${sep}${prop}${displayColor(hex)}`));
 });
 
+// ==text== is a highlight, as in Obsidian.
+marked.use({
+  extensions: [
+    {
+      name: 'highlight',
+      level: 'inline',
+      start: (src: string) => src.indexOf('=='),
+      tokenizer(src: string) {
+        const m = /^==(?=\S)([^\n]*?\S)==/.exec(src);
+        if (m) return { type: 'highlight', raw: m[0], text: m[1], tokens: this.lexer.inlineTokens(m[1]) };
+      },
+      renderer(token) {
+        return `<mark>${this.parser.parseInline(token.tokens ?? [])}</mark>`;
+      },
+    },
+  ],
+});
+
 interface PreviewProps {
   body: string;
   onChange: (body: string) => void;

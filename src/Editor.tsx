@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { EditorState } from '@codemirror/state';
-import { EditorView, keymap, placeholder, drawSelection } from '@codemirror/view';
+import { Decoration, EditorView, MatchDecorator, ViewPlugin, keymap, placeholder, drawSelection, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { tags as t } from '@lezer/highlight';
 import { skipFormatting, textFormatting } from './richtextEditor';
+import { toggleInline } from './markdownCommands';
 
 // Styles the Markdown source so it reads almost like rendered text: headings
 // are larger, emphasis is applied, and the syntax marks fade into the background.
@@ -23,6 +24,35 @@ const markdownStyle = HighlightStyle.define([
   { tag: t.quote, color: 'var(--text-muted)', fontStyle: 'italic' },
   { tag: [t.processingInstruction, t.meta, t.contentSeparator], color: 'var(--text-faint)' },
   { tag: t.list, color: 'var(--text-muted)' },
+]);
+
+// ==highlighted== text gets a marker-pen background; the == marks fade out.
+const highlightMarks = new MatchDecorator({
+  regexp: /==(?=\S)(.*?\S)==/g,
+  decorate: (add, from, to) => {
+    add(from, from + 2, Decoration.mark({ class: 'cm-highlight-mark' }));
+    add(from + 2, to - 2, Decoration.mark({ class: 'cm-highlight' }));
+    add(to - 2, to, Decoration.mark({ class: 'cm-highlight-mark' }));
+  },
+});
+const highlighting = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = highlightMarks.createDeco(view);
+    }
+    update(update: ViewUpdate) {
+      this.decorations = highlightMarks.updateDeco(update, this.decorations);
+    }
+  },
+  { decorations: (v) => v.decorations },
+);
+
+const formatKeys = keymap.of([
+  { key: 'Mod-b', run: (v) => toggleInline(v, 'bold') },
+  { key: 'Mod-i', run: (v) => toggleInline(v, 'italic') },
+  { key: 'Mod-Shift-x', run: (v) => toggleInline(v, 'strike') },
+  { key: 'Mod-Shift-h', run: (v) => toggleInline(v, 'highlight') },
 ]);
 
 interface EditorProps {
@@ -53,6 +83,8 @@ export function Editor({ docKey, value, onChange, editorRef, onActivity }: Edito
         syntaxHighlighting(markdownStyle),
         placeholder('Start writing…'),
         textFormatting(),
+        highlighting,
+        formatKeys,
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) onChangeRef.current(update.state.doc.toString());
