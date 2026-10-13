@@ -1,6 +1,6 @@
 # MD Notes
 
-A local-first Markdown notes and tasks app for macOS. This repo also contains a separate [Capacities → Google Doc backup script](#capacities--google-doc-backup). It has a clean, Capacities-style interface, Simplenote-fast note taking, colored tags, and bundled fonts such as IBM Plex Sans and Roboto.
+A local-first Markdown notes and tasks app for macOS. This repo also contains [MD Viewer](md-viewer/README.md), a fork of the app that opens any folder of Markdown files in a two-pane layout (folder tree on the left, the same editor on the right), and a separate [Capacities → Google Doc backup script](#capacities--google-doc-backup). It has a clean, Capacities-style interface, Simplenote-fast note taking, colored tags, and bundled fonts such as IBM Plex Sans and Roboto.
 
 ![MD Notes](docs/screenshot.png)
 
@@ -134,6 +134,12 @@ In search, `↑`/`↓` moves through notes and `Enter` jumps into the editor. In
 - `shared/tasks.mjs`: parses and writes the task Markdown format and implements every task operation; used by both the main process and the UI
 - `electron/preload.cjs`: the narrow `window.notesApi` bridge
 - `src/`: React UI (`App.tsx`, `tasks/` for the task views, CodeMirror `Editor.tsx`, `Preview.tsx`, `TagInput.tsx`, `SettingsDialog.tsx`, fonts and tag palette in `theme.ts`)
+
+## MD Viewer
+
+[`md-viewer/`](md-viewer/README.md) is a separate desktop app built from the same code: open any folder and it shows the Markdown files in it and its subfolders as a tree in the left pane, with the tags underneath, and edits them in the MD Notes editor on the right. There is no middle list pane, no daily notes and no tasks. Files are edited in place and never gain frontmatter unless you add tags or title formatting to them. It has its own `package.json`, tests and [installer workflow](.github/workflows/md-viewer-mac-installer.yml).
+
+![MD Viewer](md-viewer/docs/screenshot.png)
 
 ## Capacities → Google Doc backup
 

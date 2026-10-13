@@ -1,0 +1,104 @@
+name: Build MD Viewer installer
+
+# Builds MD-Viewer-<version>-mac.dmg (universal: Apple Silicon + Intel) from
+# the md-viewer/ app. Runs on pushes and pull requests that change it, and by
+# hand from the Actions tab: the .dmg is attached to the run as an artifact.
+# Ticking "Publish release" on main publishes a release tagged
+# md-viewer-v<version> with the .dmg attached.
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish a GitHub Release (tag md-viewer-v<package.json version>) with the .dmg. Only on main.'
+        type: boolean
+        default: false
+  push:
+    branches: ['**']
+    tags: ['md-viewer-v*']
+    paths:
+      - md-viewer/**
+      - .github/workflows/md-viewer-mac-installer.yml
+  pull_request:
+    paths:
+      - md-viewer/**
+      - .github/workflows/md-viewer-mac-installer.yml
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: md-viewer
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: md-viewer/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build the app and .dmg
+        run: npm run dist
+        env:
+          # No Apple Developer certificate: the app is ad-hoc signed.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # electron-builder skips all signing on pull requests by default,
+          # which leaves an app that Apple Silicon Macs won't open. Ad-hoc
+          # signing uses no secrets, so it is safe to keep it on for PRs.
+          CSC_FOR_PULL_REQUEST: 'true'
+
+      - name: Verify the app bundle and signature
+        run: |
+          APP="release/mac-universal/MD Viewer.app"
+          test -d "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dv "$APP" 2>&1 | grep -E 'Signature=adhoc|Identifier'
+          lipo -archs "$APP/Contents/MacOS/MD Viewer"
+          ls -lh release/*.dmg
+
+      - name: Smoke test (launch the packaged app)
+        timeout-minutes: 3
+        run: |
+          OUT=$(MDVIEWER_SMOKE_TEST=1 "release/mac-universal/MD Viewer.app/Contents/MacOS/MD Viewer" 2>&1 || true)
+          echo "$OUT"
+          echo "$OUT" | grep -q SMOKE_OK
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: MD-Viewer-mac-installer
+          path: md-viewer/release/*.dmg
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/md-viewer-v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="md-viewer-v$VERSION"
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "$TAG" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match md-viewer/package.json version $VERSION. Bump the version first."
+            exit 1
+          fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" release/*.dmg --clobber
+          else
+            gh release create "$TAG" release/*.dmg \
+              --target "$GITHUB_SHA" \
+              --title "MD Viewer v$VERSION" \
+              --notes "Download MD-Viewer-$VERSION-mac.dmg below. It runs on Apple Silicon and Intel Macs with macOS 12 or later. See [INSTALL.md](https://github.com/${GITHUB_REPOSITORY}/blob/$TAG/INSTALL.md) for install steps, including the one-time security prompt on first launch."
+          fi
+          echo "Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
