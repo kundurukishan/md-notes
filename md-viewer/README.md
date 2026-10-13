@@ -10,7 +10,7 @@ A desktop app for macOS that opens a folder of Markdown files and lets you brows
 - **The MD Notes editor.** Live Markdown styling built on CodeMirror, `⌘E` for a rendered preview with tickable checkboxes, and the `⇧⌘C` Format panel for text color and heading weight.
 - **Title and filename.** The title is the file's `title` from its frontmatter if it has one, otherwise the filename. Editing the title renames the file (and updates the frontmatter title when there is one).
 - **New notes and folders.** `⌘N` creates a note in the selected note's folder; right-click a folder for *New note here* and *New folder here*. Notes are moved to the macOS Trash with `⌘⌫`.
-- **Fonts, themes, line width** from MD Notes, with the same light and dark themes.
+- **Fonts, themes, line width** from MD Notes, with the same light and dark themes. On its first launch MD Viewer copies the font, text size, line width and theme from your MD Notes settings, so both apps look the same; change them any time in Settings (`⌘,`).
 
 ## Development
 

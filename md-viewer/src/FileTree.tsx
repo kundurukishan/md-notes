@@ -84,12 +84,12 @@ interface FileTreeProps {
 
 export function FileTree(props: FileTreeProps) {
   const { nodes, selectedKey, isOpen, onToggle, onSelect, onContextMenu, depth = 0 } = props;
-  const indent = { paddingLeft: `${10 + depth * 16}px` };
+  const indent = { paddingLeft: `${10 + depth * 18}px` };
   const newFolderForm = (parent: string) =>
     props.newFolderIn === parent && (
       <form
         className="tree-item dir new-folder-form"
-        style={{ paddingLeft: `${10 + (depth + (parent ? 1 : 0)) * 16}px` }}
+        style={{ paddingLeft: `${10 + (depth + (parent ? 1 : 0)) * 18}px` }}
         onSubmit={(e) => {
           e.preventDefault();
           props.onNewFolderSubmit();

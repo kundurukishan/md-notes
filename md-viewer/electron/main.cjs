@@ -22,11 +22,24 @@ let store = null;
 let watcher = null;
 let mainWindow = null;
 
+// MD Notes keeps its settings next to ours; on the first launch the font,
+// text size, line width and theme are copied from it so both apps look alike.
+const MD_NOTES_SETTINGS = path.join(app.getPath('appData'), 'MD Notes', 'settings.json');
+
 async function loadSettings() {
   try {
     settings = { ...DEFAULT_SETTINGS, ...JSON.parse(await fsp.readFile(SETTINGS_FILE, 'utf8')) };
+    return;
   } catch {
     settings = { ...DEFAULT_SETTINGS };
+  }
+  try {
+    const theirs = JSON.parse(await fsp.readFile(MD_NOTES_SETTINGS, 'utf8'));
+    for (const key of ['font', 'fontSize', 'lineWidth', 'theme']) {
+      if (key in theirs && typeof theirs[key] === typeof DEFAULT_SETTINGS[key]) settings[key] = theirs[key];
+    }
+  } catch {
+    // No MD Notes settings: keep the defaults.
   }
 }
 
